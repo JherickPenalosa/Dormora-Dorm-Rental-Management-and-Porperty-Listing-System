@@ -1,0 +1,2032 @@
+
+/* Dormora - File 13: Landing Page Styling and Responsive Hero */
+
+/* 1. Reset the default Vite layout */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { display: block; margin: 0; min-width: 320px; }
+#root { width: 100%; min-height: 100vh; }
+button { font: inherit; }
+
+/* 2. Light and dark theme colors */
+.dormora {
+  --primary: #087260;
+  --background: #f8fbfa;
+  --card: #ffffff;
+  --soft: #edf7f2;
+  --text: #172b29;
+  --muted: #657670;
+  --border: #e1ebe6;
+  --hero: #e4f2eb;
+  --shadow: 0 8px 25px rgba(20, 65, 53, 0.08);
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--text);
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  line-height: 1.5;
+}
+
+.dormora.dark-mode {
+  --primary: #4ad2ad;
+  --background: #101c1a;
+  --card: #192a26;
+  --soft: #243b35;
+  --text: #f2faf7;
+  --muted: #b3c6be;
+  --border: #354a42;
+  --hero: #1b3730;
+  --shadow: 0 8px 25px rgba(0, 0, 0, 0.24);
+}
+
+.dormora a { color: inherit; text-decoration: none; }
+.dormora button, .dormora a { transition: 0.2s ease; }
+.dormora button:focus-visible, .dormora a:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+.page-container { width: min(1200px, calc(100% - 48px)); margin: auto; }
+
+/* 3. System title and navbar */
+.system-title-bar {
+  padding: 6px 12px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.header-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 70px;
+}
+.brand, .footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.brand svg, .footer-brand svg { color: var(--primary); }
+.main-nav { display: flex; gap: 24px; font-size: 13px; font-weight: 650; }
+.main-nav a:hover, .footer-links a:hover { color: var(--primary); }
+.header-actions { display: flex; align-items: center; gap: 9px; }
+.theme-button, .mobile-menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 39px;
+  height: 39px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.header-login, .header-register {
+  padding: 10px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.header-login { background: var(--card); color: var(--primary); }
+.header-register { background: #087260; color: white; }
+.header-login:disabled, .header-register:disabled { opacity: 0.65; cursor: not-allowed; }
+.mobile-menu-button { display: none; }
+
+/* 4. Hero section */
+
+/* Canva photo with an overlay for readable text */
+.hero-section {
+  background-color: var(--hero);
+  background-image:
+    
+    url("./assets/dormora-hero-background-light.jpg");
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.dormora.dark-mode .hero-section {
+  background-color: var(--hero);
+  background-image:
+    url("./assets/dormora-hero-background-dark.jpg");
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.hero-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 56px);
+  padding-top: 58px;
+  padding-bottom: 70px;
+}
+.hero-text { min-width: 0; }
+.eyebrow {
+  display: inline-block;
+  padding: 7px 13px;
+  border-radius: 30px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.hero-text h1 {
+  margin: 17px 0;
+  font-size: clamp(38px, 4vw, 60px);
+  line-height: 1.12;
+  letter-spacing: -1.5px;
+}
+.hero-text h1 span { display: block; color: var(--primary); }
+.hero-text > p { max-width: 480px; color: var(--muted); font-size: 16px; }
+.hero-buttons, .hero-highlights { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.hero-buttons { margin-top: 24px; }
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 12px 19px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.button:hover { transform: translateY(-2px); }
+.button-primary { background: #087260; color: #ffffff !important; }
+.button-outline { background: var(--card); color: var(--primary) !important; border: 1px solid var(--primary); }
+.hero-highlights { margin-top: 21px; color: var(--muted); font-size: 12px; }
+.hero-highlights span { display: flex; align-items: center; gap: 6px; }
+.hero-highlights svg { color: var(--primary); }
+
+/* 5. Temporary laptop image (replace the asset with a real UI screenshot later) */
+.hero-preview {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  width: 100%;
+  max-width: 620px;
+  margin-inline: auto;
+  padding: 12px 0;
+}
+/* A soft glow behind the transparent PNG, without changing its contents. */
+.hero-preview::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 8% 5% 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(29, 139, 107, 0.17), transparent 70%);
+  pointer-events: none;
+}
+.hero-laptop-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 18px rgba(12, 67, 51, 0.13));
+}
+
+.dark-mode .hero-preview::before {
+  background: radial-gradient(circle, rgba(67, 211, 167, 0.13), transparent 70%);
+}
+.dark-mode .hero-laptop-image {
+  filter: drop-shadow(0 20px 22px rgba(0, 0, 0, 0.32));
+}
+
+/* 6. Feature cards */
+.features-section { position: relative; margin-top: -21px; }
+.feature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+.feature-card, .rental-card, .role-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  box-shadow: var(--shadow);
+}
+.feature-card { display: flex; align-items: flex-start; gap: 13px; padding: 18px; }
+.feature-icon, .role-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--soft);
+  color: var(--primary);
+}
+.feature-card h3, .rental-card h3, .role-card h3 { margin: 0 0 5px; font-size: 15px; }
+.feature-card p, .role-card p { margin: 0; color: var(--muted); font-size: 12px; }
+
+/* 7. Rental listings */
+.rentals-section, .how-section { padding-top: 45px; }
+.section-heading { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.section-heading h2 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.5px; }
+.section-heading p, .preview-note { margin: 0; color: var(--muted); font-size: 12px; }
+.rental-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.rental-card { overflow: hidden; }
+.rental-card:hover { transform: translateY(-3px); }
+.rental-image {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 166px;
+  color: #26574d;
+  font-size: 12px;
+  font-weight: 700;
+}
+.rental-image-one { background: linear-gradient(135deg, #e0efe7, #94bdb0); }
+.rental-image-two { background: linear-gradient(135deg, #e8e6d7, #a7bfaf); }
+.rental-image-three { background: linear-gradient(135deg, #dbedf0, #8bbeb4); }
+.rental-details { padding: 17px; }
+.rental-type { color: var(--primary); font-size: 11px; font-weight: 700; }
+.rental-details h3 { margin-top: 7px; }
+.rental-details p { display: flex; align-items: center; gap: 5px; margin: 8px 0 13px; color: var(--muted); font-size: 12px; }
+.rental-details > strong { color: var(--primary); font-size: 19px; }
+.rental-details > strong small { font-size: 12px; font-weight: 500; }
+
+/* 8. Renter and owner cards */
+.role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
+.role-card { display: flex; align-items: center; gap: 17px; padding: 23px; }
+.renter-role { background: var(--soft); }
+.owner-role .role-icon { color: #a76d1b; background: #fff2de; }
+
+/* 9. Call-to-action banner */
+.about-section { padding-top: 35px; padding-bottom: 42px; }
+.about-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 27px 34px;
+  border-radius: 16px;
+  background: linear-gradient(100deg, #07574c, #0c8772);
+  color: #ffffff;
+}
+.about-banner h2 { margin: 0 0 4px; font-size: 23px; }
+.about-banner p { margin: 0; color: #dbf4ed; font-size: 13px; }
+.button-white { flex-shrink: 0; background: white; color: #0a6657 !important; }
+
+/* 10. Footer */
+.site-footer { background: #103d37; color: #effbf7; }
+.footer-content { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 85px; }
+.footer-brand { color: white; font-size: 19px; }
+.footer-brand svg { color: #9ce8cf; }
+.footer-content p, .footer-links { color: #d1e9e0; font-size: 12px; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 18px; }
+
+/* 11. Tablet layout */
+@media (max-width: 1050px) {
+  .main-nav { gap: 14px; }
+  .hero-layout { gap: 24px; }
+  .feature-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* 12. Switch to collapsible navigation before the desktop header gets crowded */
+@media (max-width: 980px) {
+  .mobile-menu-button { display: flex; }
+  .header-actions { margin-left: auto; }
+  .main-nav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    gap: 0;
+    padding: 10px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 0 0 12px 12px;
+    box-shadow: var(--shadow);
+  }
+  .main-nav.menu-open { display: flex; }
+  .main-nav a { padding: 10px 2px; }
+}
+
+/* 13. Tablet and mobile layout */
+@media (max-width: 780px) {
+  .page-container { width: calc(100% - 32px); }
+  .header-content { min-height: 64px; }
+  .hero-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 40px 0 52px; }
+  .hero-text { text-align: center; }
+  .hero-preview { max-width: 580px; padding-top: 4px; }
+  .hero-text > p { margin-left: auto; margin-right: auto; }
+  .hero-buttons, .hero-highlights { justify-content: center; }
+  .hero-text h1 { font-size: clamp(36px, 7vw, 48px); }
+  .rental-grid { grid-template-columns: repeat(2, 1fr); }
+  .role-grid { grid-template-columns: 1fr; }
+  .footer-content { flex-wrap: wrap; justify-content: center; padding: 24px 0; text-align: center; }
+}
+
+@media (max-width: 520px) {
+  .system-title-bar { font-size: 9px; }
+  /* Two header rows keep both account buttons visible on narrow screens. */
+  .header-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-top: 9px;
+    padding-bottom: 10px;
+  }
+  .brand { grid-column: 1; grid-row: 1; font-size: 21px; }
+  .mobile-menu-button { grid-column: 2; grid-row: 1; }
+  .header-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+  .header-login, .header-register { padding: 8px 12px; font-size: 12px; }
+  .hero-text h1 { font-size: clamp(34px, 10vw, 43px); }
+  .hero-preview { padding: 0; }
+  .feature-grid, .rental-grid { grid-template-columns: 1fr; }
+  .section-heading { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .about-banner { flex-direction: column; align-items: flex-start; padding: 25px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .dormora button, .dormora a { transition: none; }
+}
+
+
+
+/* =====================================================
+   DORMORA - FILE 16: LOGIN PAGE STYLING
+   Append these styles to the bottom of App.css.
+   ===================================================== */
+
+/* 15. Login page background and navigation */
+
+.login-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.login-header-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 15px;
+}
+
+.login-header-nav > a {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-header-nav > a:hover {
+  color: var(--primary);
+}
+
+.login-register-nav {
+  padding: 10px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-register-nav:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  background:
+    radial-gradient(
+      ellipse at 12% 18%,
+      rgba(8, 114, 96, 0.11),
+      transparent 44%
+    ),
+    radial-gradient(
+      ellipse at 90% 85%,
+      rgba(37, 164, 123, 0.08),
+      transparent 40%
+    ),
+    var(--background);
+}
+
+.login-layout {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) minmax(340px, 450px);
+  align-items: center;
+  gap: clamp(35px, 6vw, 105px);
+  padding-top: 70px;
+  padding-bottom: 80px;
+}
+
+/* 16. Left column: introduction */
+
+.login-intro {
+  min-width: 0;
+}
+
+.login-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.login-intro h1 {
+  margin: 20px 0 17px;
+  max-width: 570px;
+  color: var(--text);
+  font-size: clamp(36px, 4vw, 57px);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -1.5px;
+}
+
+.login-intro h1 span {
+  display: block;
+  color: var(--primary);
+}
+
+.login-intro > p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+/* Login benefits */
+
+.login-benefits {
+  display: grid;
+  gap: 20px;
+  margin-top: 35px;
+}
+
+.login-benefit {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+.login-benefit-icon {
+  display: flex;
+  flex: 0 0 46px;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--card);
+  color: var(--primary);
+}
+
+.login-benefit h3 {
+  margin: 1px 0 4px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.login-benefit p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 17. Right column: login card */
+
+.login-card {
+  min-width: 0;
+  padding: clamp(24px, 3.3vw, 39px);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow:
+    0 18px 55px rgba(13, 76, 60, 0.10);
+}
+
+.dark-mode.login-page .login-card {
+  box-shadow:
+    0 20px 55px rgba(0, 0, 0, 0.25);
+}
+
+.login-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 55px;
+  height: 55px;
+  margin-bottom: 17px;
+  border-radius: 16px;
+  background: var(--soft);
+  color: var(--primary);
+}
+
+.login-card h2 {
+  margin: 0 0 5px;
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.7px;
+}
+
+.login-card-subtitle {
+  margin: 0 0 26px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Login form */
+
+.login-form {
+  display: grid;
+  gap: 18px;
+}
+
+.login-field label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-required {
+  color: #dd5151;
+}
+
+.login-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 49px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  color: var(--muted);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.login-input-wrap:focus-within {
+  border-color: var(--primary);
+  box-shadow:
+    0 0 0 3px rgba(8, 114, 96, 0.11);
+}
+
+.login-input-wrap > svg {
+  flex-shrink: 0;
+}
+
+.login-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  min-height: 47px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.login-input-wrap input::placeholder {
+  color: var(--muted);
+  opacity: 0.78;
+}
+
+/* Show / hide password button */
+
+.login-password-toggle {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 40px;
+  margin-right: -7px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.login-password-toggle:hover {
+  background: var(--soft);
+  color: var(--primary);
+}
+
+/* Form helpers */
+
+.login-form-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: -5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.login-forgot-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.login-forgot-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* CAPTCHA placeholder */
+
+.login-captcha-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.login-captcha-note svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+/* Login button */
+
+.login-submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 49px;
+  width: 100%;
+  border: 1px solid #087260;
+  border-radius: 10px;
+  background: #087260;
+  color: white;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.login-submit-button:disabled {
+  opacity: 0.63;
+  cursor: not-allowed;
+}
+
+/* Informational messages */
+
+.login-preview-message {
+  margin: 17px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.login-register-message {
+  margin-top: 20px;
+  padding-top: 19px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* 18. Login footer */
+
+.login-footer-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 74px;
+  padding-top: 15px;
+  padding-bottom: 15px;
+  font-size: 12px;
+}
+
+.login-footer-content a {
+  font-weight: 700;
+}
+
+.login-footer-content a:hover {
+  color: #9ce8cf;
+}
+
+/* 19. Tablet responsiveness */
+
+@media (max-width: 920px) {
+  .login-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 38px;
+    max-width: 660px;
+    padding-top: 45px;
+    padding-bottom: 55px;
+  }
+
+  .login-intro h1 {
+    max-width: 540px;
+    font-size: clamp(34px, 5.5vw, 48px);
+  }
+
+  .login-benefits {
+    grid-template-columns: 1fr;
+    gap: 15px;
+    margin-top: 26px;
+  }
+}
+
+/* 20. Mobile responsiveness */
+
+@media (max-width: 520px) {
+  .login-page .header-content {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .login-page .brand {
+    display: flex;
+    font-size: 21px;
+  }
+
+  .login-header-nav {
+    gap: 9px;
+  }
+
+  .login-header-nav > a,
+  .login-register-nav {
+    font-size: 12px;
+  }
+
+  .login-register-nav {
+    padding: 8px 10px;
+  }
+
+  .login-header-nav .theme-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .login-layout {
+    gap: 27px;
+    padding-top: 32px;
+    padding-bottom: 38px;
+  }
+
+  .login-intro h1 {
+    font-size: clamp(32px, 9vw, 42px);
+    letter-spacing: -0.8px;
+  }
+
+  .login-intro > p {
+    font-size: 13px;
+  }
+
+  .login-card {
+    padding: 23px 20px;
+    border-radius: 17px;
+  }
+
+  .login-footer-content {
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+
+/* Keep the hero outline button consistent in both themes */
+.dormora.dark-mode .hero-buttons .button-outline {
+  background: #ffffff;
+  color: #087260 !important;
+  border: 1px solid #087260;
+}
+
+
+/* =====================================================
+   DORMORA - FILE 22: LOGIN PAGE REFINEMENTS
+   Add this section at the END of App.css.
+   ===================================================== */
+
+/* Keep the login card comfortably sized */
+.login-page .login-card {
+  width: 100%;
+  max-width: 480px;
+  justify-self: center;
+}
+
+/* Improve the input fields */
+.login-page .login-input-wrap {
+  min-height: 52px;
+}
+
+.login-page .login-input-wrap input {
+  min-height: 50px;
+}
+
+/* Make the password eye button easier to click */
+.login-page .login-password-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  margin-right: -9px;
+}
+
+/* Prevent long text from overflowing */
+.login-page .login-card,
+.login-page .login-card p,
+.login-page .login-captcha-note {
+  overflow-wrap: break-word;
+}
+
+/* Improve keyboard accessibility */
+.login-page .login-password-toggle:focus-visible,
+.login-page .login-header-nav a:focus-visible,
+.login-page .login-header-nav button:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+
+/* Tablet spacing */
+@media (min-width: 781px) and (max-width: 1100px) {
+  .login-page .login-layout {
+    gap: clamp(26px, 4vw, 55px);
+  }
+}
+
+/* Tablet introduction layout */
+@media (min-width: 641px) and (max-width: 920px) {
+  .login-page .login-benefits {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .login-page .login-benefit {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .login-page .login-benefit-icon {
+    flex-basis: auto;
+  }
+}
+
+/* Mobile layout */
+@media (max-width: 520px) {
+  .login-page .header-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .login-page .brand {
+    align-self: flex-start;
+  }
+
+  .login-page .login-header-nav {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .login-page .login-layout {
+    padding-top: 26px;
+    padding-bottom: 32px;
+  }
+
+  .login-page .login-benefits {
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .login-page .login-card {
+    padding: 22px 18px;
+  }
+
+  .login-page .login-card h2 {
+    font-size: 25px;
+  }
+
+  .login-page .login-form {
+    gap: 16px;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 360px) {
+  .login-page .login-intro h1 {
+    font-size: 31px;
+  }
+
+  .login-page .login-card {
+    padding: 20px 15px;
+  }
+}
+
+
+
+/* =========================================================
+   DORMORA - FILE 24: REGISTRATION PAGE STYLING
+   Append this entire section to the END of src/App.css.
+   Do not replace your existing landing or login styles.
+   ========================================================= */
+
+/* 1. Registration page layout */
+.register-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.register-page .register-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.register-page .register-header-nav > a {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.register-page .register-header-nav > a:hover {
+  color: var(--primary);
+}
+
+.register-page .register-main {
+  flex: 1;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(8, 114, 96, 0.08), transparent 32%),
+    radial-gradient(circle at 95% 76%, rgba(8, 114, 96, 0.06), transparent 35%),
+    var(--background);
+}
+
+.register-page .register-layout {
+  max-width: 980px;
+  padding-top: 52px;
+  padding-bottom: 64px;
+}
+
+/* 2. Page introduction */
+.register-page .register-intro {
+  margin-bottom: 24px;
+}
+
+.register-page .register-heading {
+  max-width: 760px;
+}
+
+.register-page .register-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.register-page .register-heading h1 {
+  margin: 17px 0 8px;
+  color: var(--text);
+  font-size: clamp(31px, 4vw, 44px);
+  line-height: 1.15;
+  letter-spacing: -1px;
+}
+
+.register-page .register-heading > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.register-page .register-security-note,
+.register-page .register-verification-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--soft);
+}
+
+.register-page .register-security-note {
+  margin-top: 23px;
+}
+
+.register-page .register-security-note > svg,
+.register-page .register-verification-note > svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.register-page .register-security-note strong,
+.register-page .register-verification-note strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.register-page .register-security-note p,
+.register-page .register-verification-note p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 3. Sections and headings */
+.register-page .register-form {
+  display: grid;
+  gap: 21px;
+}
+
+.register-page .register-section {
+  min-width: 0;
+  padding: 29px 32px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.register-page .register-section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-bottom: 23px;
+}
+
+.register-page .register-step-number {
+  display: flex;
+  flex: 0 0 39px;
+  align-items: center;
+  justify-content: center;
+  width: 39px;
+  height: 39px;
+  border-radius: 11px;
+  background: var(--soft);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.register-page .register-section-heading h2 {
+  margin: 0 0 5px;
+  color: var(--text);
+  font-size: 19px;
+  line-height: 1.3;
+  letter-spacing: -0.3px;
+}
+
+.register-page .register-section-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 4. Renter / Owner role selection */
+.register-page .register-role-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.register-page .register-role-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--background);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.register-page .register-role-option.is-selected {
+  border-color: var(--primary);
+  background: var(--soft);
+}
+
+.register-page .register-role-option:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.register-page .register-role-option input {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  margin: 2px 0 0;
+  accent-color: var(--primary);
+}
+
+.register-page .register-role-option span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 5px;
+}
+
+.register-page .register-role-option strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.register-page .register-role-option small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.register-page .register-role-option > svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+/* 5. Fields, labels, and inputs */
+.register-page .register-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 19px 20px;
+}
+
+.register-page .register-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 7px;
+}
+
+.register-page .register-full-width {
+  grid-column: 1 / -1;
+}
+
+.register-page .register-field label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.register-page .register-required,
+.register-page .register-consent strong {
+  color: #d84c4c;
+  font-style: normal;
+}
+
+.register-page .register-field label em {
+  color: #ce4444;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.register-page .register-field input,
+.register-page .register-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  background: var(--background);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.register-page .register-field input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.register-page .register-field input:focus,
+.register-page .register-field select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(8, 114, 96, 0.12);
+}
+
+.register-page .register-field input:read-only,
+.register-page .register-field input:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.register-page .register-field small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.register-page .register-field .register-field-error {
+  color: #d84c4c;
+  font-weight: 700;
+}
+
+.register-page .register-inline-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+/* 6. Password visibility controls and strength preview */
+.register-page .register-password-wrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.register-page .register-password-wrap:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(8, 114, 96, 0.12);
+}
+
+.register-page .register-password-wrap input {
+  flex: 1;
+  border: none;
+  background: transparent;
+}
+
+.register-page .register-password-wrap input:focus {
+  box-shadow: none;
+}
+
+.register-page .register-password-wrap button {
+  display: flex;
+  flex: 0 0 43px;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-right: 3px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.register-page .register-password-wrap button:hover {
+  background: var(--soft);
+  color: var(--primary);
+}
+
+.register-page .register-strength-meter {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.register-page .register-strength-meter span {
+  height: 6px;
+  border-radius: 100px;
+  background: var(--border);
+}
+
+/* 7. Security questions and privacy consent */
+.register-page .register-question-list {
+  display: grid;
+  gap: 16px;
+}
+
+.register-page .register-question-prompt {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.register-page .register-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+  cursor: pointer;
+}
+
+.register-page .register-consent input {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  margin-top: 4px;
+  accent-color: var(--primary);
+}
+
+.register-page .register-verification-note {
+  margin-top: 22px;
+}
+
+.register-page .register-submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 50px;
+  margin-top: 23px;
+  border: 1px solid #087260;
+  border-radius: 10px;
+  background: #087260;
+  color: white;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.register-page .register-submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.register-page .register-preview-message,
+.register-page .register-login-prompt {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.register-page .register-login-prompt a {
+  color: var(--primary);
+  font-weight: 750;
+}
+
+.register-page .register-login-prompt a:hover {
+  text-decoration: underline;
+}
+
+.register-page .register-bottom-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 23px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.register-page .register-bottom-hint svg {
+  color: var(--primary);
+}
+
+/* 8. Tablet */
+@media (max-width: 780px) {
+  .register-page .register-layout {
+    padding-top: 35px;
+    padding-bottom: 45px;
+  }
+
+  .register-page .register-section {
+    padding: 24px;
+  }
+}
+
+/* 9. Phones */
+@media (max-width: 520px) {
+  .register-page .register-header-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .register-page .register-header-content .brand {
+    align-self: flex-start;
+  }
+
+  .register-page .register-header-nav {
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .register-page .register-layout {
+    padding-top: 27px;
+    padding-bottom: 38px;
+  }
+
+  .register-page .register-heading h1 {
+    font-size: 32px;
+  }
+
+  .register-page .register-section {
+    padding: 20px 17px;
+    border-radius: 14px;
+  }
+
+  .register-page .register-section-heading h2 {
+    font-size: 17px;
+  }
+
+  .register-page .register-role-options,
+  .register-page .register-fields-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .register-page .register-full-width {
+    grid-column: auto;
+  }
+
+  .register-page .register-section-heading {
+    gap: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .register-page .register-role-option,
+  .register-page .register-field input,
+  .register-page .register-field select,
+  .register-page .register-password-wrap {
+    transition: none;
+  }
+}
+
+
+
+
+/* =========================================================
+   DORMORA - FILE 30: FORGOT PASSWORD PAGE STYLING
+   Append this entire section to the BOTTOM of src/App.css.
+   Do not replace your existing landing, login, or registration CSS.
+   ========================================================= */
+
+/* 1. Page shell and simplified header */
+.forgot-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.forgot-page .forgot-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.forgot-page .forgot-header-nav > a {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.forgot-page .forgot-header-nav > a:hover {
+  color: var(--primary);
+}
+
+.forgot-page .forgot-header-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 39px;
+  padding: 8px 15px;
+  border: 1px solid var(--primary);
+  border-radius: 9px;
+  color: var(--primary) !important;
+  background: var(--card);
+}
+
+.forgot-page .forgot-header-login:hover {
+  background: var(--soft);
+}
+
+/* 2. Main layout */
+.forgot-page .forgot-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  background:
+    radial-gradient(circle at 10% 15%, rgba(8, 114, 96, 0.08), transparent 36%),
+    radial-gradient(circle at 95% 85%, rgba(8, 114, 96, 0.055), transparent 34%),
+    var(--background);
+}
+
+.forgot-page .forgot-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr);
+  align-items: center;
+  gap: clamp(32px, 6vw, 86px);
+  max-width: 1100px;
+  padding-top: 64px;
+  padding-bottom: 76px;
+}
+
+.forgot-page .forgot-intro,
+.forgot-page .forgot-card {
+  min-width: 0;
+}
+
+/* 3. Heading and introduction */
+.forgot-page .forgot-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.forgot-page .forgot-intro h1 {
+  margin: 17px 0 13px;
+  color: var(--text);
+  font-size: clamp(35px, 4.6vw, 52px);
+  font-weight: 800;
+  letter-spacing: -1.6px;
+  line-height: 1.12;
+}
+
+.forgot-page .forgot-intro h1 span {
+  color: var(--primary);
+}
+
+.forgot-page .forgot-description {
+  max-width: 530px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+/* 4. Four recovery steps */
+.forgot-page .forgot-steps {
+  display: grid;
+  gap: 11px;
+  margin: 27px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.forgot-page .forgot-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.forgot-page .forgot-step.is-current {
+  border-color: var(--primary);
+  background: var(--soft);
+}
+
+.forgot-page .forgot-step-number {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.forgot-page .forgot-step-icon {
+  display: flex;
+  flex: 0 0 37px;
+  align-items: center;
+  justify-content: center;
+  width: 37px;
+  height: 37px;
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--primary);
+}
+
+.forgot-page .forgot-step.is-current .forgot-step-icon {
+  background: var(--card);
+}
+
+.forgot-page .forgot-step-copy {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.forgot-page .forgot-step-copy strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.forgot-page .forgot-step-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.forgot-page .forgot-current-label {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/* 5. Security information box */
+.forgot-page .forgot-info-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.forgot-page .forgot-info-note svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+/* 6. Account recovery form card */
+.forgot-page .forgot-card {
+  width: 100%;
+  max-width: 500px;
+  justify-self: center;
+  padding: clamp(24px, 3.5vw, 39px);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.forgot-page .forgot-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 17px;
+  border-radius: 14px;
+  background: var(--soft);
+  color: var(--primary);
+}
+
+.forgot-page .forgot-card-step {
+  margin-bottom: 7px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.forgot-page .forgot-card h2 {
+  margin: 0 0 9px;
+  color: var(--text);
+  font-size: clamp(24px, 3vw, 29px);
+  font-weight: 800;
+  letter-spacing: -0.7px;
+  line-height: 1.25;
+}
+
+.forgot-page .forgot-card-subtitle {
+  margin: 0 0 26px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* 7. Username field */
+.forgot-page .forgot-form {
+  display: grid;
+  gap: 18px;
+}
+
+.forgot-page .forgot-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.forgot-page .forgot-field label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.forgot-page .forgot-required {
+  color: #d64b4b;
+}
+
+.forgot-page .forgot-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.forgot-page .forgot-input-wrap > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.forgot-page .forgot-input-wrap:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(8, 114, 96, 0.12);
+}
+
+.forgot-page .forgot-input-wrap input {
+  flex: 1;
+  min-width: 0;
+  min-height: 50px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.forgot-page .forgot-input-wrap input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+/* 8. CAPTCHA placeholder and disabled continuation */
+.forgot-page .forgot-captcha-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 15px;
+  border: 1px dashed var(--border);
+  border-radius: 11px;
+  background: var(--soft);
+}
+
+.forgot-page .forgot-captcha-preview > svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.forgot-page .forgot-captcha-preview strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.forgot-page .forgot-captcha-preview p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.forgot-page .forgot-submit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 49px;
+  border: 1px solid #087260;
+  border-radius: 10px;
+  background: #087260;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.forgot-page .forgot-submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.forgot-page .forgot-preview-message {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+  text-align: center;
+}
+
+/* 9. Card footer and shared page footer */
+.forgot-page .forgot-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 19px;
+  border-top: 1px solid var(--border);
+}
+
+.forgot-page .forgot-card-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.forgot-page .forgot-card-footer a:hover {
+  text-decoration: underline;
+}
+
+.forgot-page .login-footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 74px;
+  color: #e4f4ee;
+  font-size: 12px;
+}
+
+.forgot-page .login-footer-content a:hover {
+  text-decoration: underline;
+}
+
+/* 10. Responsive tablet / narrow laptop */
+@media (max-width: 920px) {
+  .forgot-page .forgot-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+    max-width: 690px;
+    padding-top: 38px;
+    padding-bottom: 52px;
+  }
+
+  .forgot-page .forgot-card {
+    max-width: 100%;
+  }
+}
+
+/* 11. Phone layout */
+@media (max-width: 520px) {
+  .forgot-page .forgot-header-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 11px;
+    padding-top: 11px;
+    padding-bottom: 12px;
+  }
+
+  .forgot-page .forgot-header-content .brand {
+    align-self: flex-start;
+  }
+
+  .forgot-page .forgot-header-nav {
+    width: 100%;
+    justify-content: space-between;
+    gap: 9px;
+  }
+
+  .forgot-page .forgot-layout {
+    gap: 24px;
+    padding-top: 28px;
+    padding-bottom: 37px;
+  }
+
+  .forgot-page .forgot-intro h1 {
+    font-size: clamp(31px, 8.5vw, 39px);
+    letter-spacing: -1px;
+  }
+
+  .forgot-page .forgot-description {
+    font-size: 13px;
+  }
+
+  .forgot-page .forgot-step {
+    gap: 9px;
+    padding: 11px;
+  }
+
+  .forgot-page .forgot-step-icon {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .forgot-page .forgot-current-label {
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+
+  .forgot-page .forgot-card {
+    padding: 24px 19px;
+    border-radius: 15px;
+  }
+
+  .forgot-page .login-footer-content {
+    flex-direction: column;
+    justify-content: center;
+    min-height: 84px;
+    padding: 16px 0;
+    text-align: center;
+  }
+}
+
+@media (max-width: 360px) {
+  .forgot-page .forgot-step-number {
+    display: none;
+  }
+
+  .forgot-page .forgot-card {
+    padding: 21px 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forgot-page .forgot-input-wrap {
+    transition: none;
+  }
+}
+
+
+
+
+/* Hide Edge's automatic password eye icon */
+.dormora input::-ms-reveal {
+  display: none !important;
+}
+
+
+
+

@@ -1,0 +1,38 @@
+
+/* ========================================================
+   DORMORA - FILE 33: SHARED LIGHT / DARK THEME
+   Destination: frontend/src/styles/theme.css
+
+   Extracted unchanged from the user's current App.css.
+   Do not import until the stylesheet migration is complete.
+   ======================================================== */
+
+/* 2. Light and dark theme colors */
+.dormora {
+  --primary: #087260;
+  --background: #f8fbfa;
+  --card: #ffffff;
+  --soft: #edf7f2;
+  --text: #172b29;
+  --muted: #657670;
+  --border: #e1ebe6;
+  --hero: #e4f2eb;
+  --shadow: 0 8px 25px rgba(20, 65, 53, 0.08);
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--text);
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  line-height: 1.5;
+}
+
+.dormora.dark-mode {
+  --primary: #4ad2ad;
+  --background: #101c1a;
+  --card: #192a26;
+  --soft: #243b35;
+  --text: #f2faf7;
+  --muted: #b3c6be;
+  --border: #354a42;
+  --hero: #1b3730;
+  --shadow: 0 8px 25px rgba(0, 0, 0, 0.24);
+}

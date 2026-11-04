@@ -1,0 +1,26 @@
+
+/* =========================================================
+   DORMORA - FILE 41: CSS ENTRY POINT
+   Destination: frontend/src/App.css
+
+   This replaces the former 2,000+ line App.css.
+   Keep the eight extracted stylesheets in src/styles/.
+   The existing page components already import ../App.css.
+
+   CSS import order is intentional:
+   1. Theme variables
+   2. Shared foundations
+   3. Shared components
+   4. Page-specific styles (mobile overrides come after navbar)
+   ========================================================= */
+
+@import "./styles/theme.css";
+@import "./styles/shared.css";
+
+@import "./styles/components/navbar.css";
+@import "./styles/components/footer.css";
+
+@import "./styles/pages/landing.css";
+@import "./styles/pages/login.css";
+@import "./styles/pages/register.css";
+@import "./styles/pages/forgot-password.css";

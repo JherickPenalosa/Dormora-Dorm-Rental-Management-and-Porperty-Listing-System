@@ -1,0 +1,138 @@
+
+/* =========================================================
+   DORMORA - FILE 34: SHARED STYLES
+   Destination: frontend/src/styles/shared.css
+
+   Extracted from the uploaded App.css.
+   Do not import this file until the CSS migration is complete.
+   ========================================================= */
+
+/* 1. Base reset (previously at the top of App.css) */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { display: block; margin: 0; min-width: 320px; }
+#root { width: 100%; min-height: 100vh; }
+button { font: inherit; }
+
+/* 2. Links, controls and keyboard focus shared by all pages */
+.dormora a { color: inherit; text-decoration: none; }
+.dormora button, .dormora a { transition: 0.2s ease; }
+.dormora button:focus-visible, .dormora a:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+
+/* 3. Site-wide content container and system title */
+.page-container {
+  width: min(1200px, calc(100% - 48px));
+  margin: auto;
+}
+
+.system-title-bar {
+  padding: 6px 12px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* 4. Shared header shell and Dormora branding */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 70px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.brand svg { color: var(--primary); }
+
+/* Used by the landing, login, registration and recovery headers */
+.theme-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 39px;
+  height: 39px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+/* 5. Shared secondary account navigation (Login and Register pages) */
+.login-register-nav {
+  padding: 10px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-register-nav:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 6. Compact footer shared by Login, Register and Forgot Password */
+.login-footer-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 74px;
+  padding-top: 15px;
+  padding-bottom: 15px;
+  font-size: 12px;
+}
+
+.login-footer-content a { font-weight: 700; }
+.login-footer-content a:hover { color: #9ce8cf; }
+
+/* 7. Hide Edge's extra eye; keep Dormora's React eye buttons */
+.dormora input::-ms-reveal {
+  display: none !important;
+}
+
+/* 8. Shared responsive rules */
+@media (max-width: 780px) {
+  .page-container { width: calc(100% - 32px); }
+  .header-content { min-height: 64px; }
+}
+
+@media (max-width: 520px) {
+  .system-title-bar { font-size: 9px; }
+  .brand { font-size: 21px; }
+  .login-footer-content {
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .dormora button, .dormora a { transition: none; }
+}

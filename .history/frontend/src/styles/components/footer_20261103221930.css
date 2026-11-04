@@ -1,0 +1,71 @@
+
+/* =========================================================
+   DORMORA - FILE 36: FOOTER STYLES
+   Destination: frontend/src/styles/components/footer.css
+
+   Extracted from the latest uploaded App.css.
+   These styles apply to the reusable Footer.jsx component.
+   The compact login/register/recovery footer uses the
+   .login-footer-content rules in shared.css instead.
+
+   Do not import until the CSS migration is complete.
+   ========================================================= */
+
+/* 1. Footer background and text */
+.site-footer {
+  background: #103d37;
+  color: #effbf7;
+}
+
+/* 2. Footer layout */
+.footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 85px;
+}
+
+/* 3. Dormora footer branding
+   The base font and flex properties were formerly shared
+   with .brand; they are placed here to keep the files independent. */
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: white;
+}
+
+.footer-brand svg {
+  color: #9ce8cf;
+}
+
+/* 4. Copyright and footer navigation */
+.footer-content p,
+.footer-links {
+  color: #d1e9e0;
+  font-size: 12px;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.footer-links a:hover {
+  color: var(--primary);
+}
+
+/* 5. Responsive footer layout */
+@media (max-width: 780px) {
+  .footer-content {
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 24px 0;
+    text-align: center;
+  }
+}

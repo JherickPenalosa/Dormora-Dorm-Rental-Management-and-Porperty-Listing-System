@@ -36,7 +36,7 @@ from app.core.config import settings
 
 # Instructor's seed: D1 = 9; idle timeout is 5 + (D1 mod 5) minutes.
 STUDENT_D1 = 9
-SESSION_IDLE_TIMEOUT_MINUTES = 5 + (STUDENT_D1 % 5)
+SESSION_IDLE_TIMEOUT_MINUTES = 3  # Presentation idle timeout
 SESSION_IDLE_TIMEOUT_SECONDS = SESSION_IDLE_TIMEOUT_MINUTES * 60
 
 _SESSION_ENTROPY_BYTES = 32  # 256 bits from the OS CSPRNG.

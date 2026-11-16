@@ -5,7 +5,7 @@ REPLACE: backend/app/services/login_service.py (previously File 66).
 Purpose:
 - Verify username OR email and password against the existing Argon2id hash.
 - Enforce persistent progressive account lockouts after failed attempts
-  3 / 6 / 9, using assigned D1=9: 24s / 48s / 96s.
+  3 / 6 / 9 with instructor-wide 15s / 30s / 60s lockouts.
 - Record login failures and lockout events in existing security_logs.
 - Return a trusted internal decision that a future CAPTCHA-protected
   login router can use to issue a LOGIN OTP.
@@ -41,15 +41,14 @@ from app.db.database import SessionLocal, engine
 from app.models.user import users_table
 
 
-# Instructor handout: tiers at 3, 6, 9 consecutive failures.
-# Dormora's assigned D1=9: 15+D1, 30+2*D1, 60+4*D1 seconds.
-D1 = 9
+# Instructor-wide security settings supersede the student-number formulas.
+# Lockout tiers are reached at the 3rd, 6th and 9th failed attempts.
 FIRST_TIER = 3
 SECOND_TIER = 6
 THIRD_TIER = 9
-FIRST_LOCK_SECONDS = 15 + D1         # 24
-SECOND_LOCK_SECONDS = 30 + 2 * D1    # 48
-THIRD_LOCK_SECONDS = 60 + 4 * D1     # 96
+FIRST_LOCK_SECONDS = 15
+SECOND_LOCK_SECONDS = 30
+THIRD_LOCK_SECONDS = 60
 
 security_logs_table = Table(
     "security_logs", MetaData(), schema="public", autoload_with=engine
@@ -88,7 +87,7 @@ def lockout_for_failure_count(failed_count: int) -> tuple[int, int | None]:
 
     Preserve the failed-attempt counter across expired lockouts. A successful
     *password step* does NOT reset it: that happens after successful login OTP.
-    Attempts after tier 3 remain locked for 96 seconds each time.
+    Attempts after tier 3 remain locked for 60 seconds each time.
     """
     if type(failed_count) is not int or failed_count < 0:
         raise ValueError("Failure count must be a nonnegative integer.")

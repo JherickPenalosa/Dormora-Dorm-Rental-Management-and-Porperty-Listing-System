@@ -1,19 +1,16 @@
-
 /*
-  Dormora Frontend File 90 -- automatic server-verified role navigation.
-
+  Dormora Requirement Validation File 10 -- Forgot Password appears after two
+  failed password-login responses. Existing File 90 login, CAPTCHA, OTP,
+  session and verified role routing remain intact.
   REPLACE: frontend/src/pages/LoginPage.jsx (previously File 87).
-
   Preserves File 27's two-column layout, theme, navbar, and footer; connects
   File 83 password + CAPTCHA, File 84 email OTP verification, File 85 resend,
   and File 88's /api/auth/me account role, plus File 89 protected workspaces.
-
   Explicit test opt-in (frontend/.env.local):
       VITE_DORMORA_LOCAL_LOGIN=true
       VITE_DORMORA_RECAPTCHA_V2_SITE_KEY=<existing public site key>
   Works ONLY with Vite development at http://localhost:5173 and the explicit
   backend File 86 local runner at http://localhost:8000.
-
   The pre-authentication challenge and authenticated session are HttpOnly
   browser cookies. Never read, store, or expose them in React/JavaScript.
   Never include user IDs, OTP IDs, passwords or OTPs in URLs or logs.
@@ -22,7 +19,6 @@
   then navigates to File 89's matching role-protected workspace. The backend
   remains the authority for authentication and role authorization.
 */
-
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -45,7 +41,9 @@ import {
 import "../App.css";
 
 const API_BASE = "http://localhost:8000";
+
 const SITE_KEY = String(import.meta.env.VITE_DORMORA_RECAPTCHA_V2_SITE_KEY || "").trim();
+
 const LOCAL_LOGIN_ENABLED =
   import.meta.env.DEV === true &&
   import.meta.env.VITE_DORMORA_LOCAL_LOGIN === "true" &&
@@ -53,18 +51,18 @@ const LOCAL_LOGIN_ENABLED =
   window.location.protocol === "http:" &&
   window.location.hostname === "localhost" &&
   window.location.port === "5173";
-
 // UI navigation only: the protected routes in File 89 independently verify
 // the session and role using the backend. Never accept a role from form input.
+
 const ROLE_WORKSPACE_PATHS = Object.freeze({
   renter: "/renter",
   property_owner: "/owner",
   admin: "/admin",
 });
-
 // Called ONLY after an OTP-accepted response, or from the explicit Retry
 // session-check control. An unverified, invalid, or expired session cannot
 // cause navigation; an unknown role never falls back to a privileged route.
+
 async function resolveVerifiedWorkspace() {
   const { response, body } = await requestJson("/api/auth/me");
   if (response.status === 401) return { kind: "signed-out" };
@@ -104,9 +102,9 @@ async function requestJson(path, options = {}) {
   }
   return { response, body };
 }
-
 // Every state-changing request obtains a fresh, signed CSRF cookie + header.
 // File 56 validates the pair; this client-side code is not a CSRF verifier.
+
 async function postWithCsrf(path, payload) {
   const { response: csrfResponse, body: csrfBody } = await requestJson("/api/csrf");
   if (!csrfResponse.ok || typeof csrfBody?.csrf_token !== "string" || !csrfBody.csrf_token) {
@@ -125,16 +123,15 @@ function waitSeconds(response) {
   const raw = Number(response.headers.get("Retry-After"));
   return Number.isFinite(raw) && raw > 0 ? Math.min(Math.ceil(raw), 86400) : 0;
 }
-
 // Follow File 65's React StrictMode-safe reCAPTCHA lifecycle. Never reuse a
 // Google-rendered DOM node after cleanup, refresh, or a failed submission.
+
 function LoginCaptcha({ siteKey, onToken, revision }) {
   const hostRef = useRef(null);
   const callbackRef = useRef(onToken);
   callbackRef.current = onToken;
   const [status, setStatus] = useState("loading");
   const [retry, setRetry] = useState(0);
-
   useEffect(() => {
     const host = hostRef.current;
     if (!host || !siteKey) return undefined;
@@ -145,13 +142,11 @@ function LoginCaptcha({ siteKey, onToken, revision }) {
     host.replaceChildren(mountTarget);
     callbackRef.current("");
     setStatus("loading");
-
     let script = document.querySelector('script[src*="recaptcha/api.js"]');
     if (script?.dataset.dormoraLoadState === "failed") {
       script.remove();
       script = null;
     }
-
     function mount() {
       if (!active || rendered || !mountTarget.isConnected) return;
       if (typeof window.grecaptcha?.render !== "function") return;
@@ -183,13 +178,11 @@ function LoginCaptcha({ siteKey, onToken, revision }) {
         }
       }
     }
-
     function onScriptError() {
       if (!active || rendered) return;
       if (script) script.dataset.dormoraLoadState = "failed";
       setStatus("error");
     }
-
     if (!script) {
       script = document.createElement("script");
       script.src = "https://www.google.com/recaptcha/api.js?render=explicit";
@@ -203,13 +196,11 @@ function LoginCaptcha({ siteKey, onToken, revision }) {
       script.addEventListener("load", mount);
       script.addEventListener("error", onScriptError);
     }
-
     const poll = window.setInterval(mount, 200);
     const timeout = window.setTimeout(() => {
       if (active && !rendered) setStatus("error");
     }, 15000);
     mount();
-
     return () => {
       active = false;
       window.clearInterval(poll);
@@ -222,7 +213,6 @@ function LoginCaptcha({ siteKey, onToken, revision }) {
       mountTarget.remove();
     };
   }, [siteKey, revision, retry]);
-
   return (
     <div className="dormora-login-captcha" aria-label="Google reCAPTCHA verification">
       <div ref={hostRef} />
@@ -249,36 +239,33 @@ function LoginPage({ darkMode, onToggleTheme }) {
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [feedback, setFeedback] = useState(null);
+  // UI-only counter for this page visit; backend owns actual lockout state.
+  // Count only server-confirmed password-login 401 responses, never CAPTCHA,
+  // CSRF, network or rate-limit errors. No identifiers or secrets are stored.
+  const [failedLoginAttempts, setFailedLoginAttempts] = useState(0);
   const [resendAfter, setResendAfter] = useState(0);
   const [clock, setClock] = useState(Date.now);
   const [expiresAt, setExpiresAt] = useState("");
   const otpRef = useRef(null);
-
   useEffect(() => {
     if (stage !== "otp" || resendAfter === 0) return undefined;
     const interval = window.setInterval(() => setClock(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, [stage, resendAfter]);
-
   useEffect(() => {
     if (stage === "otp") otpRef.current?.focus();
   }, [stage]);
-
   const secondsLeft = Math.max(0, Math.ceil((resendAfter - clock) / 1000));
-
   function showError(message) {
     setFeedback({ type: "error", message });
   }
-
   function showSuccess(message) {
     setFeedback({ type: "success", message });
   }
-
   function resetCaptcha() {
     setCaptchaToken("");
     setCaptchaRevision((value) => value + 1);
   }
-
   function backToPassword() {
     if (pending.current) return;
     setStage("password");
@@ -287,7 +274,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
     setFeedback(null);
     resetCaptcha();
   }
-
   async function handlePasswordSubmit(event) {
     event.preventDefault();
     if (pending.current || !LOCAL_LOGIN_ENABLED) return;
@@ -315,12 +301,14 @@ function LoginPage({ darkMode, onToggleTheme }) {
       // Clear sensitive input even when login is rejected. No local storage.
       form.reset();
       if (response.status === 202 && body?.verification_required === true) {
+        setFailedLoginAttempts(0);
         setStage("otp");
         setCode("");
         setClock(Date.now());
         setResendAfter(Date.now() + 60_000);
         showSuccess("A six-digit login code was requested by email. Enter it within three minutes.");
       } else if (response.status === 401) {
+        setFailedLoginAttempts((count) => Math.min(count + 1, 2));
         showError("Invalid username or password.");
       } else if (response.status === 429) {
         const wait = waitSeconds(response);
@@ -344,7 +332,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
       resetCaptcha();
     }
   }
-
   async function handleOtpSubmit(event) {
     event.preventDefault();
     if (pending.current || !LOCAL_LOGIN_ENABLED || stage !== "otp") return;
@@ -397,7 +384,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
       setBusy(false);
     }
   }
-
   async function handleResend() {
     if (pending.current || stage !== "otp" || secondsLeft > 0 || !LOCAL_LOGIN_ENABLED) return;
     pending.current = true;
@@ -429,7 +415,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
       setBusy(false);
     }
   }
-
   async function handleSessionCheck(renewIdle = false) {
     if (pending.current || !["authenticated", "confirming"].includes(stage)) return;
     pending.current = true;
@@ -470,7 +455,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
       setBusy(false);
     }
   }
-
   async function handleLogout() {
     if (pending.current || !LOCAL_LOGIN_ENABLED) return;
     pending.current = true;
@@ -494,7 +478,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
       setBusy(false);
     }
   }
-
   return (
     <div className={darkMode ? "dormora dark-mode login-page" : "dormora light-mode login-page"}>
       <style>{`
@@ -522,11 +505,9 @@ function LoginPage({ darkMode, onToggleTheme }) {
         .login-page .dormora-logged-in svg { color: var(--primary); }
         .login-page .dormora-logged-in h3 { color: var(--text); margin: 0; }
       `}</style>
-
       <div className="system-title-bar">
         Dormora: A Secure Web-Based Rental Management and Property Listing System
       </div>
-
       <header className="site-header">
         <div className="page-container header-content">
           <Link className="brand" to="/">
@@ -549,7 +530,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
           </nav>
         </div>
       </header>
-
       <main className="login-main">
         <div className="page-container login-layout">
           <section className="login-intro" aria-labelledby="login-intro-heading">
@@ -571,7 +551,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
               </div>
             </div>
           </section>
-
           <section className="login-card" aria-labelledby="login-form-heading">
             <div className="login-card-icon">
               {stage === "otp" ? <MailCheck size={26} /> : stage === "authenticated" ? <CheckCircle2 size={26} /> : stage === "confirming" ? <ShieldCheck size={26} /> : <LockKeyhole size={26} />}
@@ -585,7 +564,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
                 stage === "confirming" ? "OTP was accepted; the session check still needs to finish." :
                 "Enter your account details to continue."}
             </p>
-
             {stage === "password" && (
               <form className="login-form" onSubmit={handlePasswordSubmit}>
                 <div className="login-field">
@@ -616,15 +594,17 @@ function LoginPage({ darkMode, onToggleTheme }) {
                 </div>
                 <div className="login-form-options">
                   <span>Fields marked * are required.</span>
-                  <button
-                    type="button"
-                    className="login-forgot-button"
-                    onClick={() => navigate("/forgot-password")}
-                    disabled={busy}
-                    title="Recover your Dormora account securely"
-                  >
-                    Forgot password?
-                  </button>
+                  {failedLoginAttempts >= 2 && (
+                    <button
+                      type="button"
+                      className="login-forgot-button"
+                      onClick={() => navigate("/forgot-password")}
+                      disabled={busy}
+                      title="Recover your Dormora account securely"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
                 </div>
                 {LOCAL_LOGIN_ENABLED ? (
                   SITE_KEY ? <LoginCaptcha siteKey={SITE_KEY} onToken={setCaptchaToken} revision={captchaRevision} /> :
@@ -641,7 +621,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
                 </button>
               </form>
             )}
-
             {stage === "otp" && (
               <form className="login-form" onSubmit={handleOtpSubmit}>
                 <div className="login-field">
@@ -665,7 +644,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
                 </div>
               </form>
             )}
-
             {["authenticated", "confirming"].includes(stage) && (
               <div className="dormora-logged-in" role="status">
                 <CheckCircle2 size={32} />
@@ -691,14 +669,12 @@ function LoginPage({ darkMode, onToggleTheme }) {
                 )}
               </div>
             )}
-
             {feedback && (
               <div className="dormora-login-status" data-type={feedback.type}
                 role={feedback.type === "error" ? "alert" : "status"}>
                 {feedback.message}
               </div>
             )}
-
             <p className="login-preview-message">
               {LOCAL_LOGIN_ENABLED
                 ? "LOCAL TEST MODE: This form can send real requests, Gmail OTP messages, and session activity to your development database."
@@ -710,7 +686,6 @@ function LoginPage({ darkMode, onToggleTheme }) {
           </section>
         </div>
       </main>
-
       <footer className="site-footer">
         <div className="page-container login-footer-content">
           <span>© 2026 Dormora. All rights reserved.</span>

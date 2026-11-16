@@ -1,32 +1,20 @@
 
-"""Atomic, role-aware registration persistence for Dormora (Backend File 52).
+"""Dormora Requirement Validation File 3 — registration persistence.
 
-Destination: backend/app/services/registration.py (REPLACE Backend File 42).
+REPLACE: backend/app/services/registration.py
 
-Uses existing public.users, user_profiles, renter_preferences,
-property_owner_details, security_questions, user_security_answers and
-security_logs. No migrations, new tables, OTP delivery or public routes.
+Preserves atomic, role-aware registration, private Argon2id answer hashes,
+privacy-consent logging, and the existing OTP workflow. Adds support for
+three user-selected, distinct official Q1–Q8 security questions.
 
-This function is intentionally FAIL-CLOSED: the legacy RegisterRequest is no
-longer accepted for database inserts. Only HandoutRegisterRequest, containing
-valid privacy consent and three required security answers, is accepted.
-
-One transaction creates the pending account/profile/role row, saves exactly
-four validated role-specific fields in the correct existing role table, stores
-three salted Argon2id answer hashes, and records the consent time as the
-database-generated created_at of a PRIVACY_CONSENT_GRANTED log event.
-
-The security question catalog must contain the student's three assigned
-questions (Q7, Q2, Q4), with is_active = TRUE. No question rows are invented.
-Before public activation: confirm these provisional four-field rules against
-the signed proposal, publish the actual Privacy Notice, integrate the approved
-CAPTCHA/CSRF checks, and ensure registration logs contain trusted IP and user
-agent. Account creation here does not issue or deliver OTP.
-
-The earlier schema design uses user_id as the users primary key and keeps
-id_number unique in user_profiles. Confirm instructor approval of this
-difference from the handout's ID-as-primary-key instruction.
+TRANSITION: Until the next schema/frontend files declare
+security_question_1/2/3, preserve the existing Q7/Q2/Q4 registration contract.
+Once all three selection fields are declared on HandoutRegisterRequest,
+registration REQUIRES valid, distinct choices and cannot silently fall back.
+No tables, existing account records, OTP delivery, or routes are modified.
 """
+
+from __future__ import annotations
 
 import ipaddress
 import re
@@ -41,7 +29,7 @@ from app.models.user import users_table
 from app.schemas.auth import HandoutRegisterRequest
 
 
-# Reflect existing tables; let PostgreSQL's actual types/constraints govern.
+# Reflect existing tables; PostgreSQL remains the source of schema truth.
 user_profiles_table = Table(
     "user_profiles", users_table.metadata, schema="public", autoload_with=engine
 )
@@ -61,16 +49,39 @@ security_logs_table = Table(
     "security_logs", users_table.metadata, schema="public", autoload_with=engine
 )
 
-# Actual question IDs are database-generated; never assume Q7 has question_id=7.
-# Match against the seeded question text, then use the REAL question_id.
+
+# These are official QUESTION LABELS, not database-generated question_id values.
+QUESTION_BANK: tuple[tuple[str, str], ...] = (
+    ("Q1", "What was the name of your first pet?"),
+    ("Q2", "Who was your best friend in elementary school?"),
+    ("Q3", "Who was your favorite teacher in high school?"),
+    ("Q4", "What is your mother's maiden first name?"),
+    ("Q5", "What street did you live on in Grade 1?"),
+    ("Q6", "What was the first song you learned by heart?"),
+    ("Q7", "What was the name of your elementary school?"),
+    ("Q8", "What dish did you cook for the first time?"),
+)
+_QUESTION_TEXT_BY_CODE = dict(QUESTION_BANK)
+_QUESTION_FIELDS = (
+    "security_question_1",
+    "security_question_2",
+    "security_question_3",
+)
+_ANSWER_FIELDS = (
+    "security_answer_1",
+    "security_answer_2",
+    "security_answer_3",
+)
+_LEGACY_QUESTION_CODES = ("Q7", "Q2", "Q4")
+
+# Keep the old module-level interface for any existing readiness checks.
 ASSIGNED_QUESTIONS = (
-    ("Q7", "security_answer_1", "What was the name of your elementary school?"),
-    ("Q2", "security_answer_2", "Who was your best friend in elementary school?"),
-    ("Q4", "security_answer_3", "What is your mother's maiden first name?"),
+    ("Q7", "security_answer_1", _QUESTION_TEXT_BY_CODE["Q7"]),
+    ("Q2", "security_answer_2", _QUESTION_TEXT_BY_CODE["Q2"]),
+    ("Q4", "security_answer_3", _QUESTION_TEXT_BY_CODE["Q4"]),
 )
 
-
-# Explicit allowlist. No browser-supplied column/table name is ever used.
+# Server-owned table/column allowlist. Never use user input as a SQL identifier.
 _ROLE_SPECIFIC_FIELDS = {
     "renter": frozenset({
         "preferred_rental_type", "preferred_rental_area",
@@ -84,16 +95,16 @@ _ROLE_SPECIFIC_FIELDS = {
 
 
 class DuplicateRegistrationError(Exception):
-    """A username, email, or profile ID number is already registered."""
+    """A username, email, or profile ID is already registered."""
 
 
 class RegistrationConfigurationError(Exception):
-    """A required seeded security question is missing or ambiguous."""
+    """Required question catalog or registration configuration is invalid."""
 
 
 @dataclass(frozen=True)
 class RegistrationResult:
-    """Non-secret account summary, pending email verification."""
+    """Non-secret registration result, pending email verification."""
 
     user_id: int
     username: str
@@ -103,38 +114,86 @@ class RegistrationResult:
 
 
 def _normalize_question_text(value: str) -> str:
-    """Match smart/straight apostrophes and punctuation-free text safely."""
+    """Compare official text independent of punctuation and apostrophe style."""
+
     return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
 
 
-def _assigned_question_ids(session) -> dict[str, int]:
-    """Resolve Q7, Q2, Q4 to real active question IDs; raise if unavailable."""
-    candidates = session.execute(
+def _question_labels_for_payload(
+    payload: HandoutRegisterRequest,
+) -> tuple[str, str, str]:
+    """Accept new 3-choice schema, retaining old fixed fields temporarily.
+
+    The next schema file will declare all three security_question_N fields.
+    As soon as it does, choices become mandatory and no legacy fallback exists.
+    """
+
+    declared = tuple(name in type(payload).model_fields for name in _QUESTION_FIELDS)
+    if any(declared) and not all(declared):
+        raise RegistrationConfigurationError(
+            "Registration schema must define all three question selectors."
+        )
+
+    if all(declared):
+        raw_labels = tuple(getattr(payload, name) for name in _QUESTION_FIELDS)
+    else:
+        # Temporary compatibility with existing Q7/Q2/Q4 registration UI.
+        raw_labels = _LEGACY_QUESTION_CODES
+
+    if (
+        len(raw_labels) != 3
+        or any(type(code) is not str or code not in _QUESTION_TEXT_BY_CODE
+               for code in raw_labels)
+        or len(set(raw_labels)) != 3
+    ):
+        raise ValueError("Select three different questions from Q1 through Q8.")
+
+    return raw_labels  # type: ignore[return-value]
+
+
+def _question_ids_for_labels(session, labels: tuple[str, str, str]) -> dict[str, int]:
+    """Resolve selected official texts to unique ACTIVE database question IDs."""
+
+    rows = session.execute(
         select(
             security_questions_table.c.question_id,
             security_questions_table.c.question_text,
         ).where(security_questions_table.c.is_active.is_(True))
     ).all()
+
     lookup: dict[str, list[int]] = {}
-    for question_id, text_value in candidates:
-        normalized = _normalize_question_text(str(text_value))
+    for question_id, question_text in rows:
+        normalized = _normalize_question_text(str(question_text))
         lookup.setdefault(normalized, []).append(int(question_id))
 
-    result: dict[str, int] = {}
-    for label, answer_attribute, question_text in ASSIGNED_QUESTIONS:
-        matches = lookup.get(_normalize_question_text(question_text), [])
+    question_ids: dict[str, int] = {}
+    for attribute, code in zip(_ANSWER_FIELDS, labels):
+        matches = lookup.get(
+            _normalize_question_text(_QUESTION_TEXT_BY_CODE[code]), []
+        )
         if len(matches) != 1:
             raise RegistrationConfigurationError(
-                f"Required active authentication question {label} "
-                "is missing or duplicated. Seed or review security_questions "
-                "before enabling public registration."
+                f"Question {code} is missing, inactive, or duplicated in "
+                "the official database catalog."
             )
-        result[answer_attribute] = matches[0]
-    return result
+        question_ids[attribute] = matches[0]
+
+    if len(set(question_ids.values())) != 3:
+        raise RegistrationConfigurationError(
+            "Selected questions must resolve to three distinct database records."
+        )
+    return question_ids
+
+
+def _assigned_question_ids(session) -> dict[str, int]:
+    """Backward-compatible Q7/Q2/Q4 resolver for existing internal callers."""
+
+    return _question_ids_for_labels(session, _LEGACY_QUESTION_CODES)
 
 
 def inspect_assigned_question_readiness() -> dict[str, bool]:
-    """Read-only check for Q7/Q2/Q4. No account or answer rows are read."""
+    """Keep legacy read-only Q7/Q2/Q4 readiness check unchanged in meaning."""
+
     with SessionLocal() as session:
         rows = session.execute(
             select(
@@ -142,10 +201,10 @@ def inspect_assigned_question_readiness() -> dict[str, bool]:
                 security_questions_table.c.is_active,
             )
         ).all()
+
     active_texts = [
         _normalize_question_text(str(question_text))
-        for question_text, active in rows
-        if active
+        for question_text, active in rows if active
     ]
     return {
         label: active_texts.count(_normalize_question_text(question_text)) == 1
@@ -154,11 +213,8 @@ def inspect_assigned_question_readiness() -> dict[str, bool]:
 
 
 def _role_insert_values(payload: HandoutRegisterRequest) -> tuple[Table, dict]:
-    """Build a safe role-row INSERT from File 51's validated fields.
+    """Build role-specific INSERT from four validated, server-allowlisted fields."""
 
-    The table choice and column allowlist are fixed by server code. Any
-    unexpected schema/mapping mismatch fails BEFORE creating the user.
-    """
     if payload.role == "renter":
         table = renter_preferences_table
     elif payload.role == "property_owner":
@@ -179,10 +235,9 @@ def _role_insert_values(payload: HandoutRegisterRequest) -> tuple[Table, dict]:
     return table, values
 
 
-def _clean_context(
-    client_ip: str | None, user_agent: str | None
-) -> dict[str, str | None]:
-    """Validate caller-supplied trusted network context; no forwarding-header parsing."""
+def _clean_context(client_ip: str | None, user_agent: str | None) -> dict:
+    """Validate network metadata supplied by the trusted HTTP layer."""
+
     normalized_ip: str | None = None
     if client_ip is not None:
         if not isinstance(client_ip, str):
@@ -190,14 +245,18 @@ def _clean_context(
         try:
             normalized_ip = str(ipaddress.ip_address(client_ip))
         except ValueError:
-            raise ValueError("client_ip must be a trusted IPv4 or IPv6 address.") from None
-    if user_agent is not None:
-        if (
-            not isinstance(user_agent, str)
-            or len(user_agent) > 512
-            or any(ord(ch) < 32 or ord(ch) == 127 for ch in user_agent)
-        ):
-            raise ValueError("Invalid browser user agent.")
+            raise ValueError(
+                "client_ip must be a trusted IPv4 or IPv6 address."
+            ) from None
+
+    if user_agent is not None and (
+        not isinstance(user_agent, str)
+        or len(user_agent) > 512
+        or any(ord(character) < 32 or ord(character) == 127
+               for character in user_agent)
+    ):
+        raise ValueError("Invalid browser user agent.")
+
     return {"ip_address": normalized_ip, "user_agent": user_agent}
 
 
@@ -207,40 +266,35 @@ def register_user(
     client_ip: str | None = None,
     user_agent: str | None = None,
 ) -> RegistrationResult:
-    """Persist strict registration, role fields, answer hashes and consent atomically.
+    """Create pending user, profile, role details, 3 answer hashes and logs.
 
-    All eight INSERTs occur within one PostgreSQL transaction; any failure
-    rolls back the new user, profile, role details, three answers and two
-    audit events together. No email is sent here. File 44 issues and sends
-    the OTP only AFTER this function has successfully committed.
-
-    Registration is NOT publicly mounted yet. Future router must use the
-    strictly validated HandoutRegisterRequest and pass a trusted client_ip.
+    All inserts share one transaction, so any error rolls back all changes.
+    No OTP is sent here; the existing workflow handles email verification.
     """
+
     if not isinstance(payload, HandoutRegisterRequest):
         raise TypeError("Strict HandoutRegisterRequest is required for registration.")
     if payload.privacy_consent is not True:
         raise ValueError("Privacy consent is required.")
 
+    # Select and validate question codes before beginning any database writes.
+    selected_labels = _question_labels_for_payload(payload)
     context = _clean_context(client_ip, user_agent)
-    # Determine the role table and validate its four fields before account
-    # creation. We accept only the strict request model from File 51.
     role_table, role_values = _role_insert_values(payload)
 
-    # Hash before acquiring the transaction; answers are normalized to lower
-    # case so answer comparison can later use the same normalization.
+    # Hash before acquiring the DB transaction; never store plaintext answers.
     password_hash = hash_password(payload.password.get_secret_value())
     answer_hashes = {
-        answer_attribute: hash_password(
-            getattr(payload, answer_attribute).get_secret_value().casefold()
+        attribute: hash_password(
+            getattr(payload, attribute).get_secret_value().casefold()
         )
-        for _label, answer_attribute, _text in ASSIGNED_QUESTIONS
+        for attribute in _ANSWER_FIELDS
     }
 
     try:
         with SessionLocal.begin() as session:
-            # No users created if the question bank hasn't been populated.
-            question_ids = _assigned_question_ids(session)
+            # Check all three selected questions before inserting anything.
+            question_ids = _question_ids_for_labels(session, selected_labels)
 
             user_id = session.execute(
                 insert(users_table).values(
@@ -271,25 +325,20 @@ def register_user(
                 )
             )
 
-            # File 51 has already validated the four fields. Save them in
-            # the SAME transaction, instead of inserting only user_id.
-            # Optional fields remain NULL if the user left them blank.
             session.execute(
                 insert(role_table).values(user_id=user_id, **role_values)
             )
 
-            for _label, answer_attribute, _text in ASSIGNED_QUESTIONS:
+            for attribute in _ANSWER_FIELDS:
                 session.execute(
                     insert(user_security_answers_table).values(
                         user_id=user_id,
-                        question_id=question_ids[answer_attribute],
-                        answer_hash=answer_hashes[answer_attribute],
+                        question_id=question_ids[attribute],
+                        answer_hash=answer_hashes[attribute],
                     )
                 )
 
-            # PostgreSQL's created_at default is the consent timestamp.
-            # This is in the SAME transaction as the registration inserts.
-            # Never store plaintext answers, passwords or OTP codes in JSON.
+            # PostgreSQL created_at is the privacy-consent event timestamp.
             session.execute(
                 insert(security_logs_table).values(
                     user_id=user_id,

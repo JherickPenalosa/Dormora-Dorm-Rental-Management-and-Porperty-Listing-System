@@ -7,14 +7,14 @@ Internal service only: NO HTTP route or browser-visible account lookup.
 This code connects File 121's verified security answers to the exact login
 failure/lockout state already used by Dormora File 75. A wrong recovery answer
 adds LOGIN_FAILED to public.security_logs, so File 72's cross-account IP
-threshold also counts it. The existing 3/6/9 tiers stay at 24/48/96 seconds.
+threshold also counts it. Lockout durations are controlled by the login service and revised separately.
 
 The future recovery router MUST:
   * run trusted-Origin + signed-CSRF, server-side reCAPTCHA, per-IP request
     throttling and IP-block checks BEFORE calling this service;
   * bind the username to a short-lived, integrity-protected HttpOnly recovery
     cookie; never accept a client-provided user_id as recovery authority;
-  * show the same Q7/Q2/Q4 question choices for eligible, unknown, and locked
+  * show the same eight official questions for eligible, unknown, and locked
     accounts, and never expose internal decisions or real account IDs;
   * use a generic public error for unknown accounts, wrong answers and locked
     accounts (otherwise the response becomes a username-enumeration oracle);
@@ -47,6 +47,7 @@ from sqlalchemy import func, insert, select, text, update
 from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal, engine
+from app.db.security_question_seed import QUESTION_BANK, _normalized_question
 from app.models.user import users_table
 from app.services.login_service import lockout_for_failure_count, security_logs_table
 from app.services.recovery_security_questions import (
@@ -174,15 +175,94 @@ def _record_event(
 
 
 def recovery_question_choices(db: Session) -> tuple[tuple[int, str], ...]:
-    """Return the SAME three seeded public questions for every username.
+    """Return identical official Q1-Q8 choices for every recovery username.
 
-    The returned IDs are database question IDs, *not* account IDs.
-    Only the future CAPTCHA-protected, rate-limited endpoint should expose it.
+    These are real active DB question IDs, not Q-number suffixes and never
+    account-specific choices. Membership is checked separately against the
+    trusted user's own saved answer row. Fail closed on catalog ambiguity.
     """
     _require_transaction(db)
     questions, _ = _read_tables(db)
-    bank = _question_bank(db, questions)
-    return tuple((item.question_id, item.question_text) for item in bank)
+    required_columns = {"question_id", "question_text", "is_active"}
+    if not required_columns.issubset(questions.c.keys()):
+        raise RecoveryAccountGateUnavailable("Security question catalog schema mismatch.")
+
+    rows = db.execute(select(
+        questions.c.question_id,
+        questions.c.question_text,
+    ).where(questions.c.is_active.is_(True))).all()
+    by_text: dict[str, list[int]] = {}
+    for question_id, question_text in rows:
+        if not isinstance(question_text, str) or type(question_id) is not int:
+            raise RecoveryAccountGateUnavailable("Invalid security question catalog record.")
+        by_text.setdefault(_normalized_question(question_text), []).append(question_id)
+
+    choices: list[tuple[int, str]] = []
+    for _code, official_text in QUESTION_BANK:
+        matches = by_text.get(_normalized_question(official_text), [])
+        if len(matches) != 1:
+            raise RecoveryAccountGateUnavailable(
+                "Missing, inactive or duplicated official security question."
+            )
+        choices.append((matches[0], official_text))
+
+    if len(choices) != 8 or len({item[0] for item in choices}) != 8:
+        raise RecoveryAccountGateUnavailable("Official security question IDs are invalid.")
+    return tuple(choices)
+
+
+def _verify_selected_recovery_answer(
+    db: Session, *, trusted_user_id: int, question_id: int,
+    answer: str, confirmation: str,
+) -> bool:
+    """Verify the exact stored (user_id, question_id) Argon2id answer.
+
+    The public question menu is uniform, but this check is account-specific.
+    A question not selected by this user fails, even when selected by another
+    account. Legacy Q7/Q2/Q4 rows remain supported without migration.
+    """
+    normalized = _answer_to_verify(answer)
+    confirmed = _answer_to_verify(confirmation)
+    if (type(trusted_user_id) is not int or trusted_user_id <= 0 or
+            type(question_id) is not int or question_id <= 0 or
+            normalized is None or confirmed is None or normalized != confirmed):
+        _dummy_verify(normalized or "")
+        return False
+
+    questions, answers = _read_tables(db)
+    if not {"question_id", "question_text", "is_active"}.issubset(questions.c.keys()):
+        raise RecoveryAccountGateUnavailable("Security question schema mismatch.")
+    if not {"user_id", "question_id", "answer_hash"}.issubset(answers.c.keys()):
+        raise RecoveryAccountGateUnavailable("Recovery answer schema mismatch.")
+
+    result = db.execute(
+        select(answers.c.answer_hash, questions.c.question_text)
+        .select_from(answers.join(
+            questions, answers.c.question_id == questions.c.question_id,
+        ))
+        .where(
+            answers.c.user_id == trusted_user_id,
+            answers.c.question_id == question_id,
+            questions.c.is_active.is_(True),
+        )
+    ).one_or_none()
+    if result is None:
+        _dummy_verify(normalized)
+        return False
+
+    saved_hash, question_text = result
+    official_texts = {_normalized_question(q) for _, q in QUESTION_BANK}
+    if not isinstance(question_text, str) or _normalized_question(question_text) not in official_texts:
+        _dummy_verify(normalized)
+        return False
+    if not isinstance(saved_hash, str) or not saved_hash.startswith("$argon2id$"):
+        raise RecoveryAccountGateUnavailable("Stored recovery answer hash is invalid.")
+    try:
+        return _HASHER.verify(saved_hash, normalized) is True
+    except VerifyMismatchError:
+        return False
+    except (InvalidHashError, VerificationError, TypeError, ValueError) as exc:
+        raise RecoveryAccountGateUnavailable("Recovery answer hash verification failed.") from exc
 
 
 def resolve_recovery_username(
@@ -282,14 +362,12 @@ def verify_and_count_recovery_answer(
         )
         return RecoveryAnswerDecision("locked", retry_after_seconds=retry)
 
-    # File 121 validates the three assigned answers and Argon2id hashes.
-    try:
-        approved = verify_recovery_answer(
-            db, trusted_user_id=identity.user_id,
-            question_id=question_id, answer=answer, answer_confirmation=confirmation,
-        )
-    except RecoveryQuestionsUnavailable as exc:
-        raise RecoveryAccountGateUnavailable("Registered security questions unavailable.") from exc
+    # A submitted question MUST belong to this exact account's saved answers.
+    # Wrong/unselected choices take the EXISTING failed-login and lockout path.
+    approved = _verify_selected_recovery_answer(
+        db, trusted_user_id=identity.user_id,
+        question_id=question_id, answer=answer, confirmation=confirmation,
+    )
 
     if approved:
         # Do not clear failures here: only a verified reset/login-OTP may do so.
@@ -354,21 +432,21 @@ def _local_preflight() -> None:
     with SessionLocal.begin() as db:
         db.execute(text("SET TRANSACTION READ ONLY"))
         choices = recovery_question_choices(db)
-        if len(choices) != 3 or len({code for code, _ in choices}) != 3:
+        if len(choices) != 8 or len({code for code, _ in choices}) != 8:
             raise RecoveryAccountGateUnavailable("Recovery question choices are invalid.")
         _ = db.execute(select(func.count()).select_from(security_logs_table)).scalar_one()
 
     first, tier = lockout_for_failure_count(3)
     second, second_tier = lockout_for_failure_count(6)
     third, third_tier = lockout_for_failure_count(9)
-    if (first, second, third, tier, second_tier, third_tier) != (24, 48, 96, 1, 2, 3):
+    if (tier, second_tier, third_tier) != (1, 2, 3) or min(first, second, third) <= 0:
         raise RecoveryAccountGateUnavailable("Login lockout policy changed.")
     if not _HASHER.verify(_HASHER.hash("sample answer"), "sample answer"):
         raise RecoveryAccountGateUnavailable("Argon2id self-check failed.")
     print("DORMORA FILE 122 -- SHARED RECOVERY / LOGIN LOCKOUT GATE")
     print("Local development and PostgreSQL: PASS")
-    print("Recovery questions: Q7, Q2, Q4 | Uniform choices: READY")
-    print("Shared login lockout tiers: 3/6/9 -> 24/48/96 seconds")
+    print("Recovery question choices: Q1-Q8 | Uniform choices: READY")
+    print(f"Shared login lockout tiers: 3/6/9 -> {first}/{second}/{third} seconds")
     print("Failed recovery answers: LOGIN_FAILED audit + existing IP threshold")
     print("No account, security answer, session, password or OTP was modified.")
     print("File 122 check OK")

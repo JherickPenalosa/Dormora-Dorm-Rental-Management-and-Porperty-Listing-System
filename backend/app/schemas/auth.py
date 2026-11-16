@@ -38,11 +38,11 @@ from pydantic import (
 # From the confirmed student seed (last two digits: 96).
 STUDENT_D1 = 9
 STUDENT_D2 = 6
-USERNAME_MIN = 6 + STUDENT_D1 % 3                # 6
-USERNAME_MAX = 16 + STUDENT_D2 % 5               # 17
-PASSWORD_MIN = 8 + STUDENT_D2 % 4                # 10
+USERNAME_MIN = 6  # Instructor uniform requirement
+USERNAME_MAX = 20  # Instructor uniform requirement
+PASSWORD_MIN = 8  # Instructor uniform requirement
 PASSWORD_MAX = 64
-NAME_MAX = 20 + STUDENT_D2                     # 26
+NAME_MAX = 50  # Instructor uniform requirement
 SECURITY_QUESTION_IDS = (
     STUDENT_D2 % 8 + 1,                         # Q7
     (STUDENT_D2 + 3) % 8 + 1,                   # Q2
@@ -211,9 +211,25 @@ class HandoutRegisterRequest(RegisterRequest):
 
     confirm_password: SecretStr = Field(repr=False, exclude=True)
     privacy_consent: bool
+    # Three required questions selected by the user.
+    security_question_1: Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8"] = Field(...)
+    security_question_2: Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8"] = Field(...)
+    security_question_3: Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8"] = Field(...)
+
     security_answer_1: SecretStr = Field(repr=False, exclude=True)  # Q7
     security_answer_2: SecretStr = Field(repr=False, exclude=True)  # Q2
     security_answer_3: SecretStr = Field(repr=False, exclude=True)  # Q4
+
+    @model_validator(mode="after")
+    def validate_distinct_selected_questions(self):
+        selected = (
+            self.security_question_1,
+            self.security_question_2,
+            self.security_question_3,
+        )
+        if len(set(selected)) != 3:
+            raise ValueError("Choose three different security questions.")
+        return self
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 

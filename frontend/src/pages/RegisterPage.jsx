@@ -1,8 +1,8 @@
 /*
-  Dormora - Frontend File 133 (corrected): registration + live email OTP verification.
+  Dormora - Requirement Validation File 5 (based on Frontend File 133).
 
   One-file replacement of File 64. Preserves both account roles, name/address
-  fields, Q7/Q2/Q4, local validation, theme, and Privacy Notice link.
+  fields, locally selectable Q1-Q8 recovery questions, validation, theme, and Privacy Notice link.
 
   Real writes require Vite development mode, localhost:5173, explicit
   VITE_DORMORA_LOCAL_REGISTRATION=true, a public reCAPTCHA v2 site key,
@@ -11,6 +11,8 @@
   After HTTP 202, a signed HttpOnly pending cookie authorizes OTP verify/resend.
   The browser never reads this cookie or supplies a user ID.
   The API enforces CSRF, reCAPTCHA, rate limits, OTP and database policy.
+  Instructor classwide registration limits: username 6-20, password min 8, names max 50.
+  OTP expiry text stays at the backend's existing value until the OTP policy is updated.
 */
 
 import { useEffect, useRef, useState } from "react";
@@ -213,6 +215,9 @@ function registrationPayload(form, accountType, privacyAccepted, captchaToken) {
     username: read("username"),
     password: read("password"),
     confirm_password: read("confirmPassword"),
+    security_question_1: read("securityQuestion1"),
+    security_question_2: read("securityQuestion2"),
+    security_question_3: read("securityQuestion3"),
     security_answer_1: read("securityAnswer1"),
     security_answer_2: read("securityAnswer2"),
     security_answer_3: read("securityAnswer3"),
@@ -239,6 +244,8 @@ const SERVER_TO_FORM_FIELD = {
   family_name: "familyName", name_extension: "nameExtension",
   other_extension: "otherExtension", zip_code: "zipCode",
   confirm_password: "confirmPassword", privacy_consent: "privacyConsent",
+  security_question_1: "securityQuestion1", security_question_2: "securityQuestion2",
+  security_question_3: "securityQuestion3",
   security_answer_1: "securityAnswer1", security_answer_2: "securityAnswer2",
   security_answer_3: "securityAnswer3", preferred_rental_type: "preferredRentalType",
   preferred_rental_area: "preferredRentalArea", maximum_monthly_budget: "monthlyBudget",
@@ -304,7 +311,9 @@ const CHECKED_FIELD_ID = {
   province: "register-province", country: "register-country",
   zipCode: "register-zip", email: "register-email",
   username: "register-username", password: "register-password",
-  confirmPassword: "register-confirm", securityAnswer1: "register-answer-1",
+  confirmPassword: "register-confirm",
+  securityQuestion1: "register-question-1", securityQuestion2: "register-question-2",
+  securityQuestion3: "register-question-3", securityAnswer1: "register-answer-1",
   securityAnswer2: "register-answer-2", securityAnswer3: "register-answer-3",
   privacyConsent: "register-privacy-consent",
   preferredRentalType: "renter-room-type", preferredRentalArea: "renter-area",
@@ -312,6 +321,18 @@ const CHECKED_FIELD_ID = {
   primaryPropertyType: "owner-property-type", primaryPropertyArea: "owner-property-area",
   expectedRent: "owner-rent", expectedAvailableDate: "owner-available",
 };
+
+// Official section 5 question bank; codes are labels, not PostgreSQL question_id values.
+const SECURITY_QUESTION_BANK = [
+  { code: "Q1", question: "What was the name of your first pet?" },
+  { code: "Q2", question: "Who was your best friend in elementary school?" },
+  { code: "Q3", question: "Who was your favorite teacher in high school?" },
+  { code: "Q4", question: "What is your mother's maiden first name?" },
+  { code: "Q5", question: "What street did you live on in Grade 1?" },
+  { code: "Q6", question: "What was the first song you learned by heart?" },
+  { code: "Q7", question: "What was the name of your elementary school?" },
+  { code: "Q8", question: "What dish did you cook for the first time?" },
+];
 
 function localPasswordStrength(value) {
   const groups = [/[a-z]/.test(value), /[A-Z]/.test(value), /[0-9]/.test(value),
@@ -346,9 +367,9 @@ function validateLocalRegistration(form, role, consent) {
 
   if (!/^\d{4}-\d{4}$/.test(val("idNumber")))
     fail("idNumber", "Use the ID Number format 1234-5678.");
-  title("firstName", "First name", 2, 26);
-  title("middleName", "Middle name", 2, 26, true);
-  title("familyName", "Family name", 2, 26);
+  title("firstName", "First name", 2, 50);
+  title("middleName", "Middle name", 2, 50, true);
+  title("familyName", "Family name", 2, 50);
   if (val("nameExtension") === "Other") {
     if (!["I", "II", "III", "IV", "IX", "X"].includes(val("otherExtension")))
       fail("otherExtension", "Enter I, II, III, IV, IX, or X.");
@@ -373,15 +394,26 @@ function validateLocalRegistration(form, role, consent) {
   if (!email || email.length > 100 || /\s/.test(email) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
     fail("email", "Enter a valid email address (maximum 100 characters).");
   const username = val("username");
-  if (!/^[A-Za-z][A-Za-z0-9]{5,16}$/.test(username))
-    fail("username", "Username: 6–17 letters/digits, starting with a letter.");
+  if (!/^[A-Za-z][A-Za-z0-9]{5,19}$/.test(username))
+    fail("username", "Username: 6–20 letters/digits, starting with a letter.");
   const password = val("password");
-  if (password.length < 10 || password.length > 64 ||
+  if (password.length < 8 || password.length > 64 ||
       localPasswordStrength(password) === "Weak" ||
       (username && password.toLowerCase().includes(username.toLowerCase())))
-    fail("password", "Password: 10–64 characters, 3 character groups, and no username.");
+    fail("password", "Password: 8–64 characters, 3 character groups, and no username.");
   if (password !== val("confirmPassword"))
     fail("confirmPassword", "Password confirmation must match exactly.");
+
+  // Each registration must select exactly three distinct official questions.
+  // Browser validation is a usability aid; the backend validates again.
+  const questionCodes = [1, 2, 3].map((number) => val(`securityQuestion${number}`));
+  for (let i = 0; i < questionCodes.length; i += 1) {
+    if (!SECURITY_QUESTION_BANK.some((item) => item.code === questionCodes[i])) {
+      fail(`securityQuestion${i + 1}`, `Choose a valid Q1–Q8 question for selection ${i + 1}.`);
+    } else if (questionCodes.indexOf(questionCodes[i]) !== i) {
+      fail(`securityQuestion${i + 1}`, "Choose three different security questions.");
+    }
+  }
 
   for (let i = 1; i <= 3; i += 1) {
     const name = `securityAnswer${i}`;
@@ -439,6 +471,7 @@ function RegisterPage({ darkMode, onToggleTheme }) {
   const [extension, setExtension] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [questionSelections, setQuestionSelections] = useState(["", "", ""]);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
   const [localTestPassed, setLocalTestPassed] = useState(false);
@@ -650,6 +683,7 @@ function RegisterPage({ darkMode, onToggleTheme }) {
         setPrivacyAccepted(false);
         setBirthdate("");
         setExtension("");
+        setQuestionSelections(["", "", ""]);
         form.reset(); // Clear the secret inputs immediately after success.
         setSubmitHint("Pending account created. Enter the verification code from your Gmail inbox below.");
         showOtpScreen();
@@ -926,15 +960,15 @@ function RegisterPage({ darkMode, onToggleTheme }) {
 
                 <div className="register-field">
                   <label htmlFor="register-first-name">First Name <span className="register-required">*</span></label>
-                  <input id="register-first-name" name="firstName" type="text" placeholder="Juan" autoComplete="given-name" />
+                  <input id="register-first-name" name="firstName" type="text" placeholder="Juan" maxLength={50} autoComplete="given-name" />
                 </div>
                 <div className="register-field">
                   <label htmlFor="register-middle-name">Middle Name <em>(Optional)</em></label>
-                  <input id="register-middle-name" name="middleName" type="text" placeholder="Optional" autoComplete="additional-name" />
+                  <input id="register-middle-name" name="middleName" type="text" placeholder="Optional" maxLength={50} autoComplete="additional-name" />
                 </div>
                 <div className="register-field">
                   <label htmlFor="register-family-name">Family Name <span className="register-required">*</span></label>
-                  <input id="register-family-name" name="familyName" type="text" placeholder="Dela Cruz" autoComplete="family-name" />
+                  <input id="register-family-name" name="familyName" type="text" placeholder="Dela Cruz" maxLength={50} autoComplete="family-name" />
                 </div>
                 <div className="register-field">
                   <label htmlFor="register-extension">Name Extension <em>(Optional)</em></label>
@@ -1095,13 +1129,13 @@ function RegisterPage({ darkMode, onToggleTheme }) {
                 </div>
                 <div className="register-field register-full-width">
                   <label htmlFor="register-username">Username <span className="register-required">*</span></label>
-                  <input id="register-username" name="username" type="text" placeholder="Choose a username" autoComplete="username" spellCheck={false} />
-                  <small>Length and availability checks will follow the assigned student seed and FastAPI validation.</small>
+                  <input id="register-username" name="username" type="text" placeholder="Choose a username" maxLength={20} autoComplete="username" spellCheck={false} />
+                  <small>6–20 characters, letters and digits, starting with a letter. FastAPI verifies these rules.</small>
                 </div>
                 <div className="register-field">
                   <label htmlFor="register-password">Password <span className="register-required">*</span></label>
                   <div className="register-password-wrap">
-                    <input id="register-password" name="password" type={showPassword ? "text" : "password"} placeholder="Create a password" autoComplete="new-password" />
+                    <input id="register-password" name="password" type={showPassword ? "text" : "password"} placeholder="Create a password" minLength={8} maxLength={64} autoComplete="new-password" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -1110,52 +1144,83 @@ function RegisterPage({ darkMode, onToggleTheme }) {
                 <div className="register-field">
                   <label htmlFor="register-confirm">Re-enter Password <span className="register-required">*</span></label>
                   <div className="register-password-wrap">
-                    <input id="register-confirm" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} placeholder="Confirm password" autoComplete="new-password" />
+                    <input id="register-confirm" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} placeholder="Confirm password" minLength={8} maxLength={64} autoComplete="new-password" />
                     <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}>
                       {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
                 <div className="register-field register-full-width">
-                  <small>Password test rule: 10–64 characters, at least three of lowercase,
+                  <small>Password test rule: 8–64 characters, at least three of lowercase,
                     uppercase, numbers, and symbols; do not include your username.</small>
                 </div>
               </div>
             </section>
 
-            {/* 6. Three seed-assigned security questions */}
+            {/* 6. Three user-selected, distinct security questions (Q1-Q8) */}
             <section className="register-section" aria-labelledby="register-questions-title">
               <div className="register-section-heading">
                 <span className="register-step-number">06</span>
                 <div>
                   <h2 id="register-questions-title">Account recovery questions</h2>
-                  <p>Three required questions will be assigned using your IT 107 seed.</p>
+                  <p>Choose three different questions from the official question bank and provide an answer for each.</p>
                 </div>
               </div>
               <div className="register-question-list">
-                {[
-                  { number: 1, label: "Q7", question: "What was the name of your elementary school?" },
-                  { number: 2, label: "Q2", question: "Who was your best friend in elementary school?" },
-                  { number: 3, label: "Q4", question: "What is your mother's maiden first name?" },
-                ].map(({ number, label, question }) => (
-                  <div className="register-field" key={label}>
-                    <label htmlFor={`register-answer-${number}`}>
-                      {label} — Question {number} <span className="register-required">*</span>
-                    </label>
-                    <p className="register-question-prompt">{question}</p>
-                    <input
-                      id={`register-answer-${number}`}
-                      name={`securityAnswer${number}`}
-                      type="password"
-                      autoComplete="off"
-                      placeholder="Use a sample answer for local testing"
-                    />
-                  </div>
-                ))}
+                {[1, 2, 3].map((number) => {
+                  const selection = questionSelections[number - 1];
+                  const chosenQuestion = SECURITY_QUESTION_BANK.find((item) => item.code === selection);
+                  return (
+                    <div className="register-field" key={number}>
+                      <label htmlFor={`register-question-${number}`}>
+                        Security question {number} <span className="register-required">*</span>
+                      </label>
+                      <select
+                        id={`register-question-${number}`}
+                        name={`securityQuestion${number}`}
+                        value={selection}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          setQuestionSelections((previous) => previous.map((code, index) =>
+                            index === number - 1 ? next : code));
+                          clearFeedback();
+                        }}
+                        required
+                      >
+                        <option value="">Select one question</option>
+                        {SECURITY_QUESTION_BANK.map(({ code, question }) => (
+                          <option
+                            key={code}
+                            value={code}
+                            disabled={questionSelections.some((selected, index) =>
+                              index !== number - 1 && selected === code)}
+                          >
+                            {code} — {question}
+                          </option>
+                        ))}
+                      </select>
+                      {chosenQuestion && (
+                        <p className="register-question-prompt">{chosenQuestion.question}</p>
+                      )}
+                      <label htmlFor={`register-answer-${number}`}>
+                        Answer to question {number} <span className="register-required">*</span>
+                      </label>
+                      <input
+                        id={`register-answer-${number}`}
+                        name={`securityAnswer${number}`}
+                        type="password"
+                        autoComplete="off"
+                        placeholder="Use a fictional answer for local testing"
+                        maxLength={50}
+                        required
+                      />
+                    </div>
+                  );
+                })}
               </div>
               <p className="register-inline-note">
-                In live localhost mode, the server hashes recovery answers and stores the
-                hashes. Use fictional answers in this development test.
+                All three selections must be different. The server securely hashes the recovery
+                answers and stores the selected question IDs. Use fictional answers in local testing.
               </p>
             </section>
 

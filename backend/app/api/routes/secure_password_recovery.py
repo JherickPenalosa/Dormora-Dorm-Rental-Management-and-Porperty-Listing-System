@@ -16,8 +16,8 @@ Endpoints after explicit integration:
   POST /api/auth/password-recovery/reset       Consume grant, update password
 
 The browser never supplies or receives a user ID. Identifying a username
-returns the same three public seed questions for all accounts, including
-unknown accounts. A signed, expiring HttpOnly cookie binds that input to the
+returns the same eight official public questions for all accounts,
+including unknown accounts. Saved per-account selections are never returned. A signed, expiring HttpOnly cookie binds that input to the
 answer request; it is not an authenticated session. Invalid questions or
 answers are audited through the existing File 122 shared-login lockout gate.
 Identification after a validated CAPTCHA also records RESET_REQUESTED in the
@@ -47,11 +47,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, text
 
 from app.api.routes import secure_login
 from app.core.config import settings
 from app.db.database import SessionLocal
+from app.db.security_question_seed import QUESTION_BANK
 from app.models.user import users_table
 from app.services.login_service import security_logs_table
 from app.services.password_change_alert_email import (
@@ -339,18 +340,55 @@ def _captcha_rejected(ip: str, agent: str | None) -> None:
     raise _error(400, "CAPTCHA verification failed. Try again.")
 
 
+def _uniform_public_question_choices(db) -> list[tuple[int, str]]:
+    """Return the SAME eight public choices for known and unknown accounts.
+
+    Read only active question-bank rows. The identity step MUST NOT disclose
+    which questions a particular account chose. Answer verification against
+    the account's saved question IDs stays in recovery_account_gate.py.
+    """
+    rows = db.execute(text(
+        "SELECT question_id, question_text "
+        "FROM public.security_questions WHERE is_active IS TRUE"
+    )).all()
+
+    normalized_ids: dict[str, list[int]] = {}
+    for question_id, question_text in rows:
+        if not isinstance(question_text, str):
+            continue
+        normalized = re.sub(r"[^a-z0-9]+", " ", question_text.casefold()).strip()
+        normalized_ids.setdefault(normalized, []).append(int(question_id))
+
+    if len(QUESTION_BANK) != 8 or {label for label, _ in QUESTION_BANK} != {
+        "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8"
+    }:
+        raise ValueError("Official security question bank requires review.")
+
+    public_choices: list[tuple[int, str]] = []
+    for _label, canonical_text in QUESTION_BANK:
+        normalized = re.sub(r"[^a-z0-9]+", " ", canonical_text.casefold()).strip()
+        matches = normalized_ids.get(normalized, [])
+        if len(matches) != 1:
+            raise ValueError("Security question bank is incomplete or ambiguous.")
+        public_choices.append((matches[0], canonical_text))
+
+    if len({question_id for question_id, _ in public_choices}) != 8:
+        raise ValueError("Security question bank contains repeated IDs.")
+    return public_choices
+
+
 @router.post("/identify", response_model=IdentifyAcknowledgment)
 def identify_recovery_account(
     payload: IdentifySubmission, request: Request, response: Response,
 ) -> IdentifyAcknowledgment:
-    """CAPTCHA-gated identification; uniform choices and acknowledgment."""
+    """CAPTCHA-gated identification; uniform Q1?Q8 choices for everyone."""
     response.headers.update(_CACHE)
     ip, agent = _guards(request)
     _abuse_gate(ip, agent, "password")
     _captcha_check(payload.captcha_token, ip, agent)
     try:
         with SessionLocal.begin() as db:
-            choices = recovery_question_choices(db)
+            choices = _uniform_public_question_choices(db)
             # Required handout event: a recovery request was started.
             # Log identically for known and unknown usernames. No account ID,
             # password, CAPTCHA token, recovery OTP, or reset grant is stored.

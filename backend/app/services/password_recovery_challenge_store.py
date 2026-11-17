@@ -82,7 +82,7 @@ class RecoveryResetGrant:
     expires_at: datetime
 
 
-OTP_SECONDS = 180  # Three-minute Dormora seed
+OTP_SECONDS = 300  # Five-minute instructor requirement
 CHALLENGE_SECONDS = 900
 RESEND_COOLDOWN_SECONDS = 60
 MAX_RESENDS = 3
@@ -411,7 +411,7 @@ def _local_preflight(*, setup: bool) -> None:
                 table = _existing_table(conn)
     print("DORMORA FILE 120 -- RECOVERY OTP AND RESET-GRANT STORAGE")
     print("Local development and PostgreSQL: PASS")
-    print("OTP hashing: Argon2id | Expiry: 3 minutes | Wrong attempts: 3")
+    print("OTP hashing: Argon2id | Expiry: 5 minutes | Wrong attempts: 3")
     print("Resends: 60-second cooldown | Max 3 within 15 minutes")
     print("One-time reset grants: 10-minute expiry; password history via File 104")
     print("Recovery storage table:", "PRESENT and compatible" if table is not None else "MISSING")

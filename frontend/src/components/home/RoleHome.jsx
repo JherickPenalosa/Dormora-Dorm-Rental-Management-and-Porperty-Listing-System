@@ -604,7 +604,7 @@ export default function RoleHome({
         onClick={() => setMenuOpen(false)}
       />
       <aside className={`df-side ${menuOpen ? "open" : ""}`} aria-label="Dashboard navigation">
-        <div className="df-logo"><Building2 size={28} /> Dormora</div>
+        <div className="df-logo"><House size={29} strokeWidth={2.5} /> Dormora</div>
         <nav className="df-menu" aria-label={`${info.role} pages`}>
           {PAGES[role].map(([page, label, Icon]) => (
             <button

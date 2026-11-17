@@ -1,20 +1,19 @@
+"""Dormora — email OTP policy.
 
-"""Dormora — Backend File 49: student-seeded email OTP policy.
+Install as: backend/app/core/otp_policy.py (REPLACE EXISTING FILE)
 
-Install as: backend/app/core/otp_policy.py  (NEW FILE)
+Current uniform instructor setting:
+    - OTP expires after 5 minutes, with a strict expiration boundary.
 
-Student seed: D1=9, D2=6.  For registration, login and password reset:
+Existing security policy retained:
     - 6 cryptographically random digits (generation remains in otp_security.py)
-    - expires after 3 minutes, with strict expiration boundary
     - 3 incorrect attempts exhaust the code, including a later correct entry
-    - a new code must revoke the old code; a successful code is single use
-    - resend cooldown 60 seconds, no more than 3 resends per 15 minutes
+    - a new code revokes the old one; a successful code is single use
+    - resend cooldown 60 seconds, maximum 3 resends per 15 minutes
 
-This is a PURE POLICY module. It performs no DB queries/writes or emails and
-must NOT be mistaken for enforcement. A later integration step must enforce
-these decisions *inside PostgreSQL transactions with row locking* and connect
-the policy to all three OTP purposes. Existing otp_service.py may still use
-older limits until that integration is complete. No public OTP routes yet.
+This is a PURE POLICY module: actual enforcement belongs to the OTP service
+and its database transactions. Legacy STUDENT_D1 and STUDENT_D2 values remain
+for compatibility but no longer determine OTP expiration.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from typing import Literal, Sequence
 STUDENT_D1 = 9
 STUDENT_D2 = 6
 OTP_DIGITS = 6
-OTP_EXPIRY_MINUTES = 3 + (STUDENT_D2 % 3)  # 3
+OTP_EXPIRY_MINUTES = 5
 OTP_MAX_FAILED_ATTEMPTS = 3
 OTP_RESEND_COOLDOWN_SECONDS = 60
 OTP_MAX_RESENDS = 3

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import {
   ArrowRight,
@@ -19,8 +18,9 @@ import Footer from "../components/Footer";
 import dashboardImage from "../assets/dormora-hero-laptop.png";
 import "../App.css";
 
-// Temporary sample listings.
-// Real listings will be loaded from FastAPI later.
+// Illustrative sample listings; these are not verified photographs of actual Dormora properties.
+// Static image files belong in frontend/public/images/featured-rentals/.
+// The landing-page cards are previews only, not connected to the live listings API.
 const sampleRentals = [
   {
     id: 1,
@@ -29,6 +29,9 @@ const sampleRentals = [
     price: 4500,
     type: "Shared room",
     imageStyle: "rental-image-one",
+    image:
+      "src/assets/featured-rentals/riverside_dormitory.png",
+    imageAlt: "Sample shared dormitory bedroom with bunk beds",
   },
   {
     id: 2,
@@ -37,6 +40,9 @@ const sampleRentals = [
     price: 5000,
     type: "Private room",
     imageStyle: "rental-image-two",
+    image:
+      "src/assets/featured-rentals/maple_residences.jpg",
+    imageAlt: "Illustrative modern private rental room with a bed and desk",
   },
   {
     id: 3,
@@ -45,6 +51,9 @@ const sampleRentals = [
     price: 4800,
     type: "Dormitory",
     imageStyle: "rental-image-three",
+    image:
+      "src/assets/featured-rentals/central_stay_dorm.png",
+    imageAlt: "Sample furnished dormitory room with a study area",
   },
 ];
 
@@ -59,7 +68,6 @@ function LandingPage({ darkMode, onToggleTheme }) {
 
   return (
     <div className={darkMode ? "dormora dark-mode" : "dormora light-mode"}>
-
       {/* System title above the navigation */}
       <div className="system-title-bar">
         Dormora: A Secure Web-Based Rental Management and Property Listing System
@@ -78,7 +86,6 @@ function LandingPage({ darkMode, onToggleTheme }) {
         {/* SECTION 2: HERO */}
         <section className="hero-section" id="home">
           <div className="page-container hero-layout">
-
             <div className="hero-text">
               <span className="eyebrow">
                 For renters and property owners aged 18+
@@ -126,14 +133,12 @@ function LandingPage({ darkMode, onToggleTheme }) {
                 alt="Dormora rent dashboard displayed on a laptop"
               />
             </div>
-
           </div>
         </section>
 
         {/* SECTION 3: FEATURES */}
         <section className="features-section page-container" id="features">
           <div className="feature-grid">
-
             <article className="feature-card">
               <div className="feature-icon">
                 <House size={25} />
@@ -181,7 +186,6 @@ function LandingPage({ darkMode, onToggleTheme }) {
                 </p>
               </div>
             </article>
-
           </div>
         </section>
 
@@ -197,39 +201,51 @@ function LandingPage({ darkMode, onToggleTheme }) {
                 Examples of how available properties will appear in Dormora.
               </p>
             </div>
-
-            <span className="preview-note">
-              Sample listings only
-            </span>
+            <span className="preview-note">Sample listings only</span>
           </div>
 
           <div className="rental-grid">
             {sampleRentals.map((rental) => (
               <article className="rental-card" key={rental.id}>
-
-                <div className={`rental-image ${rental.imageStyle}`}>
-                  <BedDouble size={43} strokeWidth={1.4} />
+                <div
+                  className={`rental-image ${rental.imageStyle}`}
+                  style={{ position: "relative", overflow: "hidden" }}
+                >
+                  {/* Preserve the original placeholder if an image cannot load. */}
+                  <BedDouble size={43} strokeWidth={1.4} aria-hidden="true" />
                   <span>Photo preview</span>
+                  <img
+                    src={rental.image}
+                    alt={rental.imageAlt}
+                    loading="lazy"
+                    decoding="async"
+                    style={{
+                      display: "block",
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition: "center",
+                    }}
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
                 </div>
 
                 <div className="rental-details">
-                  <span className="rental-type">
-                    {rental.type}
-                  </span>
-
+                  <span className="rental-type">{rental.type}</span>
                   <h3>{rental.name}</h3>
-
                   <p>
                     <MapPin size={15} />
                     {rental.location}
                   </p>
-
                   <strong>
                     ₱{rental.price.toLocaleString("en-PH")}
                     <small> / month</small>
                   </strong>
                 </div>
-
               </article>
             ))}
           </div>
@@ -248,12 +264,10 @@ function LandingPage({ darkMode, onToggleTheme }) {
           </div>
 
           <div className="role-grid">
-
             <article className="role-card renter-role">
               <div className="role-icon">
                 <Wallet size={30} />
               </div>
-
               <div>
                 <h3>For Renters</h3>
                 <p>
@@ -267,7 +281,6 @@ function LandingPage({ darkMode, onToggleTheme }) {
               <div className="role-icon">
                 <Building2 size={30} />
               </div>
-
               <div>
                 <h3>For Property Owners</h3>
                 <p>
@@ -276,33 +289,28 @@ function LandingPage({ darkMode, onToggleTheme }) {
                 </p>
               </div>
             </article>
-
           </div>
         </section>
 
         {/* SECTION 6: ABOUT BANNER */}
         <section className="about-section page-container" id="about">
           <div className="about-banner">
-
             <div>
               <h2>Find your next place. Stay organized.</h2>
               <p>
                 Designed to make rental discovery and personal rent tracking simpler.
               </p>
             </div>
-
             <a className="button button-white" href="#home">
               Back to Top
               <ArrowRight size={18} />
             </a>
-
           </div>
         </section>
       </main>
 
       {/* SECTION 7: REUSABLE FOOTER */}
       <Footer />
-
     </div>
   );
 }

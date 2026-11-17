@@ -18,9 +18,9 @@ from sqlalchemy import MetaData, Table, func, insert, select, text
 
 from app.db.database import SessionLocal, engine
 
-# Dormora's confirmed seed: D1=9, D2=6. Handout threshold = 8 + D2.
-STUDENT_D2 = 6
-IP_FAILURE_THRESHOLD = 8 + STUDENT_D2
+# The instructor's uniform policy supersedes the old student-seed formula.
+STUDENT_D2 = 6  # Kept for compatibility with older imports; not used for IP blocking.
+IP_FAILURE_THRESHOLD = 10
 FAILURE_WINDOW_SECONDS = 600
 IP_BLOCK_SECONDS = 600
 _BLOCK_REASON = "seeded_login_ip_block"
@@ -75,7 +75,7 @@ def _lock_key(canonical_ip: str) -> int:
 
 
 def check_login_ip(client_ip: str, *, user_agent: str | None = None) -> LoginIpDecision:
-    """Block after 14 LOGIN_FAILED events in 10 minutes across all accounts.
+    """Block after 10 LOGIN_FAILED events in 10 minutes across all accounts.
 
     A block lasts 10 minutes from its creation. Blocked requests do not extend
     it. Advisory locks prevent duplicate block events across backend workers.

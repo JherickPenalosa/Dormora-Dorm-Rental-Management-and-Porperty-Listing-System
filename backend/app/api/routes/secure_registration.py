@@ -1,28 +1,17 @@
 
-"""Dormora Backend File 55 — connect successful registration to OTP cookie (NOT MOUNTED).
+"""Dormora Requirement Validation File 11 - field-specific duplicate replies.
 
-Destination: backend/app/api/routes/secure_registration.py (REPLACE File 53).
+REPLACE: backend/app/api/routes/secure_registration.py.
 
-DO NOT mount this router in backend/app/main.py yet. The existing File 14
-app/api/routes/auth.py router uses legacy registration and must also remain
-UNMOUNTED. The explicit safety switch below stays False until the actual
-Privacy Notice, approved system-specific fields, CSRF/CAPTCHA middleware,
-email OTP/resend API, and end-to-end security tests are ready.
+Preserves the existing strict registration schema, signed-CSRF/origin guard,
+server-side CAPTCHA, database rate limits, pending-account email OTP and
+HttpOnly cookie. Only a protected registration attempt may return a duplicate
+field, and only when File 10 verified a known PostgreSQL uniqueness constraint.
+Unknown/ambiguous constraint violations keep the generic HTTP 409 response.
 
-Once deliberately enabled and mounted under File 37's FastAPI application,
-POST /api/auth/register receives the strict File 51 registration payload and a
-Google reCAPTCHA v2 token, forwards trusted request context to File 48, and
-returns a non-secret response. Only AFTER File 44 reports successful OTP
-delivery does this route call File 54 to set an HttpOnly, signed, short-lived
-pending-registration cookie. The cookie is NOT a login session.
-
-A CSRF signing key is checked BEFORE registration creates database records,
-so a missing key cannot cause an account to be created without a usable OTP
-verification cookie. The future mounted FastAPI app must still run File 37's
-CSRF middleware: this endpoint does not replace signed token verification.
-
-No database connections, requests, account creation, or emails occur on import
-beyond those already performed by the existing service module imports.
+Importing this module does NOT activate the registration endpoint. The runner
+retains responsibility for explicitly enabling the localhost registration
+route and all mandatory middleware. Do not enable it through main.py.
 """
 
 from __future__ import annotations
@@ -135,6 +124,39 @@ def _safe_rejection(
     )
 
 
+# Field-specific error feedback is allowed ONLY after the existing protected
+# registration request has passed the server-side CAPTCHA, IP rate limit,
+# trusted Origin and signed-CSRF checks. There is no public availability API.
+_DUPLICATE_DETAILS = {
+    "username": "This username already exists.",
+    "email": "This email is already used.",
+    "id_number": "This ID number already exists.",
+}
+
+
+def _duplicate_conflict(error: DuplicateRegistrationError) -> HTTPException:
+    """Return the exact allowlisted field only if PostgreSQL identified it.
+
+    File 08's React component recognizes detail.code='duplicate' and
+    detail.field. Never serialize the original DB error or submitted value.
+    """
+    field = getattr(error, "field", None)
+    if type(field) is str and field in _DUPLICATE_DETAILS:
+        detail: str | dict[str, str] = {
+            "code": "duplicate",
+            "field": field,
+            "message": _DUPLICATE_DETAILS[field],
+        }
+    else:
+        detail = "An account with these registration details already exists."
+
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=detail,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.post(
     "/register",
     status_code=status.HTTP_202_ACCEPTED,
@@ -235,14 +257,8 @@ def submit_registration(
     except RegistrationSecurityRejected as error:
         raise _safe_rejection(error) from None
 
-    except DuplicateRegistrationError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "An account with these registration details already exists."
-            ),
-            headers={"Cache-Control": "no-store"},
-        ) from None
+    except DuplicateRegistrationError as error:
+        raise _duplicate_conflict(error) from None
 
     except RegistrationEmailDeliveryError:
         raise HTTPException(

@@ -1,7 +1,10 @@
 /*
-  Dormora Requirement Validation File 10 -- Forgot Password appears after two
-  failed password-login responses. Existing File 90 login, CAPTCHA, OTP,
-  session and verified role routing remain intact.
+  Dormora Requirement Validation File 10 / Frontend File 07.
+  Forgot Password appears after two failed password-login responses.
+  Login restriction feedback clears automatically after the server-based
+  Retry-After countdown ends. The backend remains the source of truth.
+  Existing File 90 login, CAPTCHA, OTP, session and verified role routing
+  remain intact.
   REPLACE: frontend/src/pages/LoginPage.jsx (previously File 87).
   Preserves File 27's two-column layout, theme, navbar, and footer; connects
   File 83 password + CAPTCHA, File 84 email OTP verification, File 85 resend,
@@ -42,7 +45,7 @@ import "../App.css";
 
 const API_BASE = "http://localhost:8000";
 
-const SITE_KEY = String(import.meta.env.VITE_DORMORA_RECAPTCHA_V2_SITE_KEY || "").trim();
+const SITE_KEY = String(import.meta.env.VITE_DORMORA_RECAPTCHA_V2_SITE_KEY ||"").trim();
 
 const LOCAL_LOGIN_ENABLED =
   import.meta.env.DEV === true &&
@@ -246,6 +249,10 @@ function LoginPage({ darkMode, onToggleTheme }) {
   const [resendAfter, setResendAfter] = useState(0);
   const [clock, setClock] = useState(Date.now);
   const [expiresAt, setExpiresAt] = useState("");
+  // DORMORA_LOGIN_UI_LOCKOUT_V2: local response feedback; backend remains authoritative.
+  const [rejectedHere, setRejectedHere] = useState(0);
+  const [loginWaitUntil, setLoginWaitUntil] = useState(0);
+  const [loginClock, setLoginClock] = useState(Date.now);
   const otpRef = useRef(null);
   useEffect(() => {
     if (stage !== "otp" || resendAfter === 0) return undefined;
@@ -256,6 +263,28 @@ function LoginPage({ darkMode, onToggleTheme }) {
     if (stage === "otp") otpRef.current?.focus();
   }, [stage]);
   const secondsLeft = Math.max(0, Math.ceil((resendAfter - clock) / 1000));
+  // The countdown is advisory UI; FastAPI still enforces every restriction.
+  useEffect(() => {
+    if (!loginWaitUntil) return undefined;
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      setLoginClock(now);
+      if (now >= loginWaitUntil) {
+        setLoginWaitUntil(0);
+        // Clear only the warning raised by the finished restriction.
+        // Do not discard a newer CAPTCHA, network, or OTP error.
+        setFeedback((current) =>
+          current?.source === "login-restriction" ? null : current
+        );
+      }
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [loginWaitUntil]);
+
+  const loginWaitSeconds = Math.max(0,
+    Math.ceil((loginWaitUntil - loginClock) / 1000));
+  const loginRestricted = loginWaitSeconds > 0;
+
   function showError(message) {
     setFeedback({ type: "error", message });
   }
@@ -276,7 +305,7 @@ function LoginPage({ darkMode, onToggleTheme }) {
   }
   async function handlePasswordSubmit(event) {
     event.preventDefault();
-    if (pending.current || !LOCAL_LOGIN_ENABLED) return;
+    if (pending.current || !LOCAL_LOGIN_ENABLED || loginRestricted) return;
     const form = event.currentTarget;
     const data = new FormData(form);
     const identifier = String(data.get("identifier") || "").trim();
@@ -303,16 +332,32 @@ function LoginPage({ darkMode, onToggleTheme }) {
       if (response.status === 202 && body?.verification_required === true) {
         setFailedLoginAttempts(0);
         setStage("otp");
+        setRejectedHere(0);
+        setLoginWaitUntil(0);
         setCode("");
         setClock(Date.now());
         setResendAfter(Date.now() + 60_000);
-        showSuccess("A six-digit login code was requested by email. Enter it within three minutes.");
+        showSuccess("A six-digit login code was requested by email. Enter it within five minutes.");
       } else if (response.status === 401) {
         setFailedLoginAttempts((count) => Math.min(count + 1, 2));
+        setRejectedHere((count) => count + 1);
         showError("Invalid username or password.");
       } else if (response.status === 429) {
         const wait = waitSeconds(response);
-        showError(`Too many login attempts. ${wait ? `Try again in ${wait} seconds.` : "Please try again later."}`);
+        // A 429 can also indicate IP/request/OTP limits, not just account lockout.
+        setRejectedHere((count) => count + 1);
+        if (wait > 0) {
+          const now = Date.now();
+          setLoginClock(now);
+          setLoginWaitUntil(now + wait * 1000);
+        }
+        setFeedback({
+          type: "error",
+          source: "login-restriction",
+          message: wait > 0
+            ? "Sign-in is temporarily restricted. Follow the countdown above before retrying."
+            : "Sign-in is temporarily restricted. Please try again later.",
+        });
       } else if (response.status === 400) {
         showError("CAPTCHA verification failed. Please complete a new challenge.");
       } else if (response.status === 403) {
@@ -492,7 +537,7 @@ function LoginPage({ darkMode, onToggleTheme }) {
           color: var(--primary); cursor: pointer; font-weight: 700; margin: 6px 0; }
         .login-page .dormora-otp-input { width: 100%; padding: 12px 14px; margin-top: 8px;
           background: var(--background); color: var(--text); border: 1px solid var(--border);
-          border-radius: 11px; font-size: 24px; font-weight: 700; text-align: center;
+          border-radius: 11px; font-size: 24px; font-weight: 700; text-align:center;
           letter-spacing: .25em; }
         .login-page .dormora-otp-input:focus-visible { outline: 3px solid var(--primary); }
         .login-page .dormora-login-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
@@ -523,7 +568,7 @@ function LoginPage({ darkMode, onToggleTheme }) {
               Register
             </Link>
             <button type="button" className="theme-button" onClick={onToggleTheme}
-              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={darkMode ? "Switch to light mode" : "Switch to darkmode"}
               title={darkMode ? "Light mode" : "Dark mode"}>
               {darkMode ? <Sun size={19} /> : <Moon size={19} />}
             </button>
@@ -599,11 +644,26 @@ function LoginPage({ darkMode, onToggleTheme }) {
                       type="button"
                       className="login-forgot-button"
                       onClick={() => navigate("/forgot-password")}
-                      disabled={busy}
+                      disabled={busy || loginRestricted}
                       title="Recover your Dormora account securely"
                     >
                       Forgot password?
                     </button>
+                  )}
+                </div>
+                <div className="dormora-login-note" role="status" aria-live="polite"
+                  style={{ padding: "11px 13px", border: "1px solid var(--border)",
+                    borderRadius: 10, background: "var(--soft)", margin: "10px 0",
+                    lineHeight: 1.6 }}>
+                  <strong>Rejected login requests on this page: {rejectedHere}</strong>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                    Browser-view count only; not the database account total.
+                  </div>
+                  {loginRestricted && (
+                    <div style={{ marginTop: 7, fontWeight: 700, color: "#b45309" }}>
+                      Sign-in restricted: {loginWaitSeconds}s remaining.
+                      Login and Forgot Password are disabled on this page.
+                    </div>
                   )}
                 </div>
                 {LOCAL_LOGIN_ENABLED ? (
@@ -616,7 +676,7 @@ function LoginPage({ darkMode, onToggleTheme }) {
                   </div>
                 )}
                 <button type="submit" className="login-submit-button"
-                  disabled={!LOCAL_LOGIN_ENABLED || !SITE_KEY || !captchaToken || busy}>
+                  disabled={!LOCAL_LOGIN_ENABLED || !SITE_KEY || !captchaToken || busy || loginRestricted}>
                   {busy ? "Verifying securely…" : "Log In"} <ArrowRight size={19} />
                 </button>
               </form>
@@ -631,7 +691,7 @@ function LoginPage({ darkMode, onToggleTheme }) {
                     onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                     placeholder="000000" disabled={busy} required />
                 </div>
-                <p className="dormora-login-note">Codes expire after three minutes, and an updated code invalidates the previous one. The original pending-login challenge expires after 15 minutes.</p>
+                <p className="dormora-login-note">Codes expire after five minutes, and an updated code invalidates the previous one. The original pending-login challenge expires after 15 minutes.</p>
                 <button className="login-submit-button" type="submit"
                   disabled={busy || !/^\d{6}$/.test(code)}>
                   {busy ? "Verifying…" : "Verify & Log In"} <ArrowRight size={19} />
@@ -647,9 +707,9 @@ function LoginPage({ darkMode, onToggleTheme }) {
             {["authenticated", "confirming"].includes(stage) && (
               <div className="dormora-logged-in" role="status">
                 <CheckCircle2 size={32} />
-                <h3>{stage === "authenticated" ? "Authenticated with FastAPI" : "Session confirmation pending"}</h3>
+                <h3>{stage === "authenticated" ? "Authenticated with FastAPI": "Session confirmation pending"}</h3>
                 <p className="dormora-login-note">
-                  {stage === "authenticated" ? "A database-backed session was confirmed. The backend enforces a nine-minute idle timeout." : "The verification API accepted your code, but the server-side session has not been confirmed yet."}
+                  {stage === "authenticated" ? "A database-backed session was confirmed. The backend enforces a 15-minute idle timeout." : "The verification API accepted your code, but the server-side session has not been confirmed yet."}
                   {expiresAt && ` Current session deadline: ${new Date(expiresAt).toLocaleTimeString()}.`}
                 </p>
                 <div className="dormora-login-actions">

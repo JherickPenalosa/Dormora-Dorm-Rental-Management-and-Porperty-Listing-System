@@ -1,5 +1,5 @@
 /*
-  Dormora - Requirement Validation File 5 (based on Frontend File 133).
+  Dormora - Registration Alignment File 08 (based on Requirement Validation File 5).
 
   One-file replacement of File 64. Preserves both account roles, name/address
   fields, locally selectable Q1-Q8 recovery questions, validation, theme, and Privacy Notice link.
@@ -12,7 +12,14 @@
   The browser never reads this cookie or supplies a user ID.
   The API enforces CSRF, reCAPTCHA, rate limits, OTP and database policy.
   Instructor classwide registration limits: username 6-20, password min 8, names max 50.
-  OTP expiry text stays at the backend's existing value until the OTP policy is updated.
+  Username, email and ID number must be unique; names and home addresses may
+  be shared. Optional contact numbers may also be shared. If supplied, the
+  contact number is submitted to File 14's validator and File 15's atomic
+  AES-256-GCM storage path. Never save it in local/browser storage or logs.
+  Field-specific duplicate messages are shown only if the backend returns an
+  explicit, recognized duplicate field after a protected registration request.
+  Generic 409 responses remain generic to avoid guessing private account data.
+  OTP expiry text stays at the backend's existing value until that policy is updated.
 */
 
 import { useEffect, useRef, useState } from "react";
@@ -212,6 +219,7 @@ function registrationPayload(form, accountType, privacyAccepted, captchaToken) {
     country: read("country"),
     zip_code: read("zipCode"),
     email: read("email"),
+    contact_number: optional("contactNumber"),
     username: read("username"),
     password: read("password"),
     confirm_password: read("confirmPassword"),
@@ -240,7 +248,8 @@ function registrationPayload(form, accountType, privacyAccepted, captchaToken) {
 }
 
 const SERVER_TO_FORM_FIELD = {
-  id_number: "idNumber", first_name: "firstName", middle_name: "middleName",
+  id_number: "idNumber", contact_number: "contactNumber",
+  first_name: "firstName", middle_name: "middleName",
   family_name: "familyName", name_extension: "nameExtension",
   other_extension: "otherExtension", zip_code: "zipCode",
   confirm_password: "confirmPassword", privacy_consent: "privacyConsent",
@@ -262,6 +271,41 @@ function safeFieldErrors(serverBody) {
       name: SERVER_TO_FORM_FIELD[item.field] || item.field || "privacyConsent",
       message: item.message.slice(0, 240),
     }));
+}
+
+// Show a specific duplicate message ONLY when the protected registration API
+// identifies that field. A generic HTTP 409 does not tell the browser which
+// identifier conflicts; never guess from the submitted personal data.
+const DUPLICATE_FIELD_DETAILS = Object.freeze({
+  username: { name: "username", message: "This username already exists." },
+  email: { name: "email", message: "This email is already used." },
+  id_number: { name: "idNumber", message: "This ID number already exists." },
+});
+
+function duplicateFieldErrors(serverBody) {
+  const candidates = [];
+  if (typeof serverBody?.duplicate_field === "string") {
+    candidates.push(serverBody.duplicate_field);
+  }
+  if (serverBody?.detail && typeof serverBody.detail === "object") {
+    if (typeof serverBody.detail.duplicate_field === "string") {
+      candidates.push(serverBody.detail.duplicate_field);
+    }
+    if (serverBody.detail.code === "duplicate" && typeof serverBody.detail.field === "string") {
+      candidates.push(serverBody.detail.field);
+    }
+  }
+  if (Array.isArray(serverBody?.errors)) {
+    for (const entry of serverBody.errors.slice(0, 10)) {
+      if (entry?.code === "duplicate" && typeof entry.field === "string") {
+        candidates.push(entry.field);
+      }
+    }
+  }
+
+  return [...new Set(candidates)]
+    .filter((field) => Object.prototype.hasOwnProperty.call(DUPLICATE_FIELD_DETAILS, field))
+    .map((field) => DUPLICATE_FIELD_DETAILS[field]);
 }
 
 async function requestJson(path, options = {}) {
@@ -310,6 +354,7 @@ const CHECKED_FIELD_ID = {
   barangay: "register-barangay", city: "register-city",
   province: "register-province", country: "register-country",
   zipCode: "register-zip", email: "register-email",
+  contactNumber: "register-contact-number",
   username: "register-username", password: "register-password",
   confirmPassword: "register-confirm",
   securityQuestion1: "register-question-1", securityQuestion2: "register-question-2",
@@ -343,6 +388,18 @@ function localPasswordStrength(value) {
 
 function localAge(iso) {
   return calculateAge(iso);
+}
+
+// Mirror File 14's formatting rules. FastAPI is the final authority.
+// Blank is allowed; a shared number is not an account-uniqueness key.
+function validOptionalContactNumber(raw) {
+  if (raw === "") return true;
+  const value = raw.trim();
+  if (value.length > 26 || !/^\+?[0-9][0-9() .-]{5,24}$/.test(value)) {
+    return false;
+  }
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15;
 }
 
 function validateLocalRegistration(form, role, consent) {
@@ -390,6 +447,9 @@ function validateLocalRegistration(form, role, consent) {
   if (!/^\d{4}$/.test(val("zipCode")))
     fail("zipCode", "ZIP Code must contain exactly four digits.");
 
+  if (!validOptionalContactNumber(val("contactNumber"))) {
+    fail("contactNumber", "Enter a valid contact number (7–15 digits), or leave it blank. Spaces, hyphens and + are allowed.");
+  }
   const email = val("email");
   if (!email || email.length > 100 || /\s/.test(email) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
     fail("email", "Enter a valid email address (maximum 100 characters).");
@@ -688,7 +748,13 @@ function RegisterPage({ darkMode, onToggleTheme }) {
         setSubmitHint("Pending account created. Enter the verification code from your Gmail inbox below.");
         showOtpScreen();
       } else if (result.status === 409) {
-        setSubmitError("An account with these registration details already exists. Use different fictional test details; do not repeat the same registration.");
+        const duplicateErrors = duplicateFieldErrors(body);
+        setValidationErrors(duplicateErrors);
+        setSubmitError(
+          duplicateErrors.length > 0
+            ? "One or more unique account identifiers are already registered. Check the highlighted fields."
+            : "A username, email address, or ID number may already be registered. The server did not identify which field; please check your details."
+        );
       } else if (result.status === 422) {
         setValidationErrors(safeFieldErrors(body));
         setSubmitError("FastAPI rejected one or more fields. Correct the highlighted details before trying again.");
@@ -939,7 +1005,7 @@ function RegisterPage({ darkMode, onToggleTheme }) {
                 <span className="register-step-number">02</span>
                 <div>
                   <h2 id="register-personal-title">Personal information</h2>
-                  <p>Fields marked <span className="register-required">*</span> are required.</p>
+                  <p>Fields marked <span className="register-required">*</span> are required. Family members may have the same names.</p>
                 </div>
               </div>
 
@@ -955,7 +1021,7 @@ function RegisterPage({ darkMode, onToggleTheme }) {
                     maxLength={9}
                     autoComplete="off"
                   />
-                  <small>Required instructor format: four digits, a hyphen, four digits.</small>
+                  <small>Required format: four digits, a hyphen, four digits (example: 1234-5678). Each account must have its own ID number.</small>
                 </div>
 
                 <div className="register-field">
@@ -1013,7 +1079,7 @@ function RegisterPage({ darkMode, onToggleTheme }) {
                 <span className="register-step-number">03</span>
                 <div>
                   <h2 id="register-address-title">Home address</h2>
-                  <p>Enter your residential address, not the property listing's address.</p>
+                  <p>Enter your residential address, not the property's listing address. Household members may share this address.</p>
                 </div>
               </div>
 
@@ -1054,8 +1120,7 @@ function RegisterPage({ darkMode, onToggleTheme }) {
                     {isOwner ? "Property-owner details" : "Rental preferences"}
                   </h2>
                   <p>
-                    Proposed Dormora-specific fields for your project. These are
-                    optional profile details in this preview and must match your approved proposal.
+                    Optional profile details for your Dormora account. These are not unique identifiers.
                   </p>
                 </div>
               </div>
@@ -1118,7 +1183,7 @@ function RegisterPage({ darkMode, onToggleTheme }) {
                 <span className="register-step-number">05</span>
                 <div>
                   <h2 id="register-account-title">Account credentials</h2>
-                  <p>Your email will receive verification codes and security alerts.</p>
+                  <p>Username, email address, and ID number must each be unique. Your email receives verification codes and security alerts.</p>
                 </div>
               </div>
 
@@ -1126,11 +1191,23 @@ function RegisterPage({ darkMode, onToggleTheme }) {
                 <div className="register-field register-full-width">
                   <label htmlFor="register-email">Email Address <span className="register-required">*</span></label>
                   <input id="register-email" name="email" type="email" placeholder="you@example.com" autoComplete="email" />
+                  <small>One email address per account. Use an inbox you can verify.</small>
+                </div>
+                <div className="register-field register-full-width">
+                  <label htmlFor="register-contact-number">Contact Number <em>(Optional)</em></label>
+                  <input id="register-contact-number" name="contactNumber" type="tel"
+                    inputMode="tel" autoComplete="tel" maxLength={26}
+                    placeholder="e.g. 09123456789 or +639171234567" spellCheck={false} />
+                  <small>
+                    You may share a contact number with family members. If provided,
+                    it is encrypted at rest using AES-256-GCM and is not used for uniqueness checks.
+                    Use fictional numbers while the Privacy Notice is a draft.
+                  </small>
                 </div>
                 <div className="register-field register-full-width">
                   <label htmlFor="register-username">Username <span className="register-required">*</span></label>
                   <input id="register-username" name="username" type="text" placeholder="Choose a username" maxLength={20} autoComplete="username" spellCheck={false} />
-                  <small>6–20 characters, letters and digits, starting with a letter. FastAPI verifies these rules.</small>
+                  <small>6–20 characters, letters and digits, starting with a letter. The username must not belong to another account; FastAPI verifies this.</small>
                 </div>
                 <div className="register-field">
                   <label htmlFor="register-password">Password <span className="register-required">*</span></label>

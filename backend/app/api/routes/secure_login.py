@@ -1,7 +1,11 @@
 
-"""Dormora Backend File 83 -- enforce request limits on the login password phase.
+"""Dormora Backend File 83 -- login password phase (post-presentation Fix 03).
 
-REPLACE: backend/app/api/routes/secure_login.py (previously File 76).
+REPLACE: backend/app/api/routes/secure_login.py.
+
+Fix 03: expose Retry-After to the same-origin-approved React frontend on 429
+responses, so it can display a server-driven countdown. No change to login,
+lockout, CAPTCHA, CSRF, IP filtering, audit, or OTP security decisions.
 
 This route connects File 75's password decision to File 72 IP blocking,
 File 74 lockout alert delivery, File 71 login OTP email, File 70's
@@ -66,7 +70,12 @@ class LoginPasswordStepAcknowledgment(BaseModel):
 def _http_error(code: int, detail: str, *, retry_after: int = 0) -> HTTPException:
     headers = dict(_CACHE_HEADERS)
     if retry_after > 0:
+        # Retry-After is not a CORS-safelisted response header. Without an
+        # explicit exposure the React frontend cannot read it via fetch(),
+        # even though it appears in the Network tab. The existing CORS
+        # middleware still restricts the allowed origin and credentials.
         headers["Retry-After"] = str(min(max(int(retry_after), 1), 86400))
+        headers["Access-Control-Expose-Headers"] = "Retry-After"
     return HTTPException(status_code=code, detail=detail, headers=headers)
 
 
@@ -118,7 +127,7 @@ def _record_captcha_failure(*, client_ip: str, user_agent: str | None,
 
 
 def _check_ip_block(*, client_ip: str, user_agent: str | None) -> None:
-    """File 72 enforces 14 failed logins per 10 minutes, blocked for 10."""
+    """File 72 checks the configured failed-login IP threshold and block duration."""
     from app.services.login_ip_service import (
         LoginIpServiceUnavailable,
         check_login_ip,
@@ -139,7 +148,7 @@ def _check_ip_block(*, client_ip: str, user_agent: str | None) -> None:
 def _check_password_request_limit(*, client_ip: str, user_agent: str | None) -> None:
     """File 82: count a password request before CAPTCHA and password hashing.
 
-    This request-volume limit is independent of File 72's seeded 14-failure
+    This request-volume limit is independent of File 72's failed-login
     IP-block threshold; it never replaces account lockouts or CAPTCHA.
     """
     from app.services.login_request_limit_service import (
@@ -195,7 +204,7 @@ def _notify_new_lockout(lockout_event_id: int | None) -> None:
         403: {"description": "Origin or CSRF rejected."},
         404: {"description": "Public login remains disabled."},
         422: {"description": "Invalid request fields."},
-        429: {"description": "IP blocked, request limited, account locked, or OTP rate-limited."},
+        429: {"description": "IP blocked, request limited, account locked, orOTP rate-limited."},
         503: {"description": "Required login security component unavailable."},
     },
 )
@@ -269,7 +278,7 @@ def submit_login_password_step(
 
     if decision.status in {"invalid_credentials", "locked"}:
         # The failed attempt was committed by File 75. Recheck so the exact
-        # 14th failure can trigger File 72's 10-minute block immediately.
+        # threshold failure can trigger File 72's IP block immediately.
         _check_ip_block(client_ip=client_ip, user_agent=agent)
 
     if decision.status == "locked":

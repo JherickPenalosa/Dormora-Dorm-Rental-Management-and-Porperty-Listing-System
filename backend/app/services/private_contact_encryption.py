@@ -1,10 +1,11 @@
-"""Dormora File 109: AES-256-GCM at-rest encryption of a private contact number.
 
-CREATE: backend/app/services/private_contact_encryption.py
+"""Dormora File 13: registration-compatible AES-256-GCM private contacts.
+
+REPLACE: backend/app/services/private_contact_encryption.py
 
 Commands (from backend/ with .venv active):
     python -m app.services.private_contact_encryption --check   # no writes
-    python -m app.services.private_contact_encryption --setup   # creates one table
+    python -m app.services.private_contact_encryption --setup   # creates onetable
 
 This module is NOT a FastAPI route. File 110 will authorize an existing
 PostgreSQL-backed user session, then call save_private_contact() and
@@ -13,6 +14,9 @@ NEVER accept the user_id from the browser for these service calls.
 
 Data stored: public.user_private_contacts (one OPTIONAL contact number per user).
 Only random 12-byte nonce + AES-256-GCM ciphertext/tag are stored, NOT plaintext.
+A separate internal registration function encrypts a contact for a newly
+inserted pending account in the SAME database transaction as registration.
+It never authorizes an unverified account to use session-only endpoints.
 The authenticated user's immutable ID is additional authenticated data (AAD),
 so moving an encrypted value to another user fails authentication.
 
@@ -166,7 +170,7 @@ def _existing_table(connection: Any) -> Table | None:
         if not isinstance(columns[column_name]["type"], LargeBinary):
             raise PrivateContactUnavailable("Private-contact encrypted columns must be BYTEA.")
         if columns[column_name]["nullable"]:
-            raise PrivateContactUnavailable("Encrypted contact columns cannot be nullable.")
+            raise PrivateContactUnavailable("Encrypted contact columns cannotbe nullable.")
     pk = inspector.get_pk_constraint(_TABLE, schema="public")
     if set(pk.get("constrained_columns") or ()) != {"user_id"}:
         raise PrivateContactUnavailable("Private-contact user ID must be unique.")
@@ -178,7 +182,7 @@ def _existing_table(connection: Any) -> Table | None:
         and fk.get("referred_columns") == ["user_id"]
         for fk in fks
     ):
-        raise PrivateContactUnavailable("Private-contact owner foreign key is missing.")
+        raise PrivateContactUnavailable("Private-contact owner foreign key ismissing.")
     return Table(_TABLE, MetaData(), schema="public", autoload_with=connection)
 
 
@@ -228,6 +232,54 @@ def save_private_contact(db: Session, *, verified_session_user_id: int,
               "algorithm": _ALGORITHM, "updated_at": func.clock_timestamp()},
     )
     db.execute(statement)
+
+
+def save_pending_registration_contact(
+    db: Session, *, newly_registered_user_id: int, contact_number: str
+) -> None:
+    """Insert an encrypted contact for a newly registered PENDING account.
+
+    INTERNAL REGISTRATION SERVICE ONLY; this is not a route or a public API.
+    The caller MUST use the user_id returned by its own INSERT into users,
+    inside the SAME caller-owned registration transaction. Never use a browser-
+    supplied ID. Calling after commit breaks registration atomicity.
+
+    Unlike save_private_contact(), a pending account is expected and a brand-
+    new contact row is inserted (not upserted). Existing contact records are
+    never overwritten by registration. If anything fails, the caller must
+    roll back the complete registration transaction.
+
+    Phone numbers are deliberately NOT unique: relatives may share one.
+    Only user_id is the primary key, with ciphertext bound to that ID as AAD.
+    """
+    _caller_transaction(db)
+    user_id = _trusted_id(newly_registered_user_id)
+    value = _normalize_phone(contact_number)
+    key = _configured_key()
+
+    # The account must still be pending and unverified. A verified session is
+    # neither needed nor acceptable for this narrowly scoped registration path.
+    statement = select(users_table.c.user_id).where(
+        users_table.c.user_id == user_id,
+        users_table.c.account_status == "pending_verification",
+        users_table.c.email_verified_at.is_(None),
+    ).with_for_update()
+    if db.execute(statement).scalar_one_or_none() != user_id:
+        raise PrivateContactUnavailable(
+            "A newly created, pending registration account is required."
+        )
+
+    table = _existing_table(db.connection())
+    if table is None:
+        raise PrivateContactUnavailable("Run File 109 --setup first.")
+    nonce, ciphertext = _encrypt(value, user_id, key)
+    # Intentionally INSERT, never UPSERT: conflicts must abort registration.
+    db.execute(pg_insert(table).values(
+        user_id=user_id,
+        nonce=nonce,
+        ciphertext=ciphertext,
+        algorithm=_ALGORITHM,
+    ))
 
 
 def read_private_contact(db: Session, *, verified_session_user_id: int) -> str | None:
@@ -293,7 +345,7 @@ def _crypto_self_check() -> None:
             _decrypt(nonce, ciphertext, wrong_user, demo_key)
         except PrivateContactUnavailable:
             continue
-        raise PrivateContactUnavailable("Encryption owner-binding/tamper test failed.")
+        raise PrivateContactUnavailable("Encryption owner-binding/tamper testfailed.")
 
 
 def main() -> None:

@@ -1,4 +1,4 @@
-"""Dormora registration schemas — Backend File 51.
+"""Dormora registration schemas — Backend File 14 (Requirement Validation continuation).
 
 Destination: backend/app/schemas/auth.py (full replacement of File 40).
 
@@ -12,6 +12,12 @@ File 51 validates the 4 optional renter / 4 optional owner preview fields
 against the existing role-specific tables. These exact requirements are still
 PROVISIONAL until compared against the instructor-approved proposal.
 File 52 must persist these values inside the existing registration transaction.
+
+File 14 adds an OPTIONAL normalized contact_number field to the strict
+registration model, matching File 13 AES-256-GCM input rules. It stays
+optional until File 15 persistence and a later frontend form are integrated.
+A contact submitted before then is NOT SAVED by the existing registration
+service; do not use registration to collect actual phone numbers yet.
 
 This module does not connect to PostgreSQL, send emails, or create accounts.
 """
@@ -60,6 +66,8 @@ _ROLE_DATE_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}\Z")
 
 _LEGACY_USERNAME = re.compile(r"[A-Za-z0-9_]{3,30}\Z")
 _STRICT_USERNAME = re.compile(r"[A-Za-z][A-Za-z0-9]*\Z")
+# Match the normalization accepted by File 13 AES-256 private-contact storage.
+_CONTACT_NUMBER_PATTERN = re.compile(r"\+?[0-9][0-9() .-]{5,24}\Z")
 
 
 def password_strength(password: str) -> Literal["Weak", "Medium", "Strong"]:
@@ -195,9 +203,9 @@ class RegisterRequest(BaseModel):
     @model_validator(mode="after")
     def validate_name_extension(self) -> Self:
         if self.name_extension == "Other" and not self.other_extension:
-            raise ValueError("Other name extension is required when selecting Other.")
+            raise ValueError("Other name extension is required when selectingOther.")
         if self.name_extension != "Other" and self.other_extension:
-            raise ValueError("Other name extension must be blank unless Other is selected.")
+            raise ValueError("Other name extension must be blank unless Otheris selected.")
         return self
 
 
@@ -211,6 +219,13 @@ class HandoutRegisterRequest(RegisterRequest):
 
     confirm_password: SecretStr = Field(repr=False, exclude=True)
     privacy_consent: bool
+    # Transition field: OPTIONAL to preserve the currently working registration
+    # UI while backend persistence and frontend collection are integrated.
+    # Never put a contact number in application logs, error replies, or model_dump.
+    # This field does not make contact numbers unique; families may share one.
+    contact_number: str | None = Field(
+        default=None, max_length=26, repr=False, exclude=True,
+    )
     # Three required questions selected by the user.
     security_question_1: Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8"] = Field(...)
     security_question_2: Literal["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8"] = Field(...)
@@ -219,6 +234,27 @@ class HandoutRegisterRequest(RegisterRequest):
     security_answer_1: SecretStr = Field(repr=False, exclude=True)  # Q7
     security_answer_2: SecretStr = Field(repr=False, exclude=True)  # Q2
     security_answer_3: SecretStr = Field(repr=False, exclude=True)  # Q4
+
+    @field_validator("contact_number", mode="before")
+    @classmethod
+    def validate_contact_number(cls, value: object) -> str | None:
+        """Normalize safely for File 13 encryption (7–15 digits, optional +).
+
+        Spaces, hyphens, dots and parentheses are formatting only. The
+        canonical form is digits, optionally prefixed with +. This is data
+        validation only; actual encrypted persistence is wired in a later file.
+        """
+        if value is None or value == "":
+            return None
+        if not isinstance(value, str):
+            raise ValueError("Enter a valid contact number.")
+        stripped = value.strip()
+        if len(stripped) > 26 or not _CONTACT_NUMBER_PATTERN.fullmatch(stripped):
+            raise ValueError("Enter a valid contact number (7–15 digits).")
+        digits = "".join(character for character in stripped if character.isdigit())
+        if not 7 <= len(digits) <= 15:
+            raise ValueError("Enter a valid contact number (7–15 digits).")
+        return ("+" if stripped.startswith("+") else "") + digits
 
     @model_validator(mode="after")
     def validate_distinct_selected_questions(self):
@@ -292,7 +328,7 @@ class HandoutRegisterRequest(RegisterRequest):
     @field_validator("email", mode="before")
     @classmethod
     def validate_email_length(cls, value: object) -> object:
-        if not isinstance(value, str) or len(value) > 100 or any(ch.isspace() for ch in value):
+        if not isinstance(value, str) or len(value) > 100 or any(ch.isspace()for ch in value):
             raise ValueError("Email must be valid, contain no spaces, and be at most 100 characters.")
         return value
 
@@ -329,7 +365,7 @@ class HandoutRegisterRequest(RegisterRequest):
                 or "  " in value
                 or not all(c.isalpha() or c.isdigit() or c == " " for c in value)
             ):
-                raise ValueError("Purok / Street must contain 3–50 letters, digits and single spaces.")
+                raise ValueError("Purok / Street must contain 3–50 letters,digits and single spaces.")
             return value
         label = {
             "first_name": "First Name",
@@ -344,7 +380,7 @@ class HandoutRegisterRequest(RegisterRequest):
 
     @field_validator("middle_name", "other_extension")
     @classmethod
-    def normalize_optional_text(cls, value: str | None, info: ValidationInfo) -> str | None:
+    def normalize_optional_text(cls, value: str | None, info: ValidationInfo)-> str | None:
         if value is None or value == "":
             return None
         if info.field_name == "middle_name":
@@ -374,7 +410,7 @@ class HandoutRegisterRequest(RegisterRequest):
             or "  " in answer
             or not all(ch.isalpha() or ch == " " for ch in answer)
         ):
-            raise ValueError("Security answer must contain 2–50 letters and single spaces only.")
+            raise ValueError("Security answer must contain 2–50 letters andsingle spaces only.")
         return value
 
     @model_validator(mode="after")
@@ -441,7 +477,7 @@ class HandoutRegisterRequest(RegisterRequest):
 
     @field_validator("maximum_monthly_budget", "expected_monthly_rent", mode="before")
     @classmethod
-    def validate_money(cls, value: object, info: ValidationInfo) -> Decimal | None:
+    def validate_money(cls, value: object, info: ValidationInfo) -> Decimal |None:
         if value is None or value == "":
             return None
         label = (
@@ -451,7 +487,7 @@ class HandoutRegisterRequest(RegisterRequest):
         # React number inputs submit text. Reject floats/booleans, exponents,
         # negative amounts, separators and more than two decimal places.
         if type(value) not in (str, int, Decimal):
-            raise ValueError(f"{label} must be a positive amount with at most 2 decimals.")
+            raise ValueError(f"{label} must be a positive amount with at most2 decimals.")
         raw = str(value)
         if not _MONEY_PATTERN.fullmatch(raw):
             raise ValueError(
@@ -477,7 +513,7 @@ class HandoutRegisterRequest(RegisterRequest):
             try:
                 selected = date.fromisoformat(value)
             except ValueError:
-                raise ValueError(f"{label} must be a valid YYYY-MM-DD date.") from None
+                raise ValueError(f"{label} must be a valid YYYY-MM-DD date.")from None
         else:
             raise ValueError(f"{label} must be a valid YYYY-MM-DD date.")
         if selected < date.today():

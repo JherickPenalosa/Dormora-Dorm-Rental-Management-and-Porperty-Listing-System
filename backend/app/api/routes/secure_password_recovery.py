@@ -1,5 +1,4 @@
-
-"""Dormora File 128: password recovery audit logging update.
+"""Dormora File 128: recovery audit and server-side lockout completion (Fix 05).
 
 REPLACE: backend/app/api/routes/secure_password_recovery.py (previously File 123)
 
@@ -20,6 +19,9 @@ returns the same eight official public questions for all accounts,
 including unknown accounts. Saved per-account selections are never returned. A signed, expiring HttpOnly cookie binds that input to the
 answer request; it is not an authenticated session. Invalid questions or
 answers are audited through the existing File 122 shared-login lockout gate.
+Fix 05 additionally checks a locked account at OTP resend, OTP verification,
+and reset-grant consumption, including when those credentials predate a lockout.
+The identify response remains uniform to prevent username enumeration.
 Identification after a validated CAPTCHA also records RESET_REQUESTED in the
 existing security_logs table for both known and unknown usernames, with a
 NULL user_id to avoid account-existence disclosure. Audit insertion must commit
@@ -41,6 +43,7 @@ import base64
 import hashlib
 import hmac
 import ipaddress
+import math
 import re
 import time
 from datetime import datetime, timezone
@@ -147,6 +150,9 @@ def _error(code: int, detail: str, retry: int = 0) -> HTTPException:
     headers = dict(_CACHE)
     if retry > 0:
         headers["Retry-After"] = str(max(1, min(86400, int(retry))))
+        # React uses a different localhost port. Permit it to read the
+        # server-specified wait without loosening trusted-origin CORS rules.
+        headers["Access-Control-Expose-Headers"] = "Retry-After"
     return HTTPException(status_code=code, detail=detail, headers=headers)
 
 
@@ -296,6 +302,60 @@ def _required_cookie(request: Request, kind: str) -> str:
     if not isinstance(token, str) or not 40 <= len(token) <= 128:
         raise _error(401, _RESTART)
     return token
+
+
+def _require_unlocked_recovery_owner(db, *, token: str, kind: str) -> None:
+    """Enforce current account lockout for an already-issued recovery token.
+
+    File 122 already denies recovery answers while a user is locked. An OTP
+    or reset grant might have been issued BEFORE a later login lockout, so
+    re-check that owner's authoritative users.locked_until in the SAME DB
+    transaction as resend, OTP verification, or the final password change.
+
+    A token is an opaque, high-entropy HttpOnly cookie, never a submitted
+    username or user ID. Neither a guessed username nor the public identify
+    endpoint receives a lockout status. This preserves account enumeration
+    protections while denying the recovery operation at every later stage.
+
+    Lock the user row first, matching File 120's user-then-challenge order.
+    The account stays locked for the duration of the guarded transaction.
+    """
+    if kind == "otp":
+        column = "challenge_digest"
+    elif kind == "grant":
+        column = "grant_digest"
+    else:
+        raise _error(503, _UNAVAILABLE)
+
+    # Match File 120's token digest contract. Malformed/unknown tokens are
+    # handled with the existing generic 401 by the downstream challenge store.
+    if not isinstance(token, str) or re.fullmatch(r"[A-Za-z0-9_-]{40,128}\Z", token, re.ASCII) is None:
+        return
+    digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+
+    # The column is chosen from two literal strings above, not user input.
+    row = db.execute(text(
+        "SELECT u.account_status, u.email_verified_at, u.locked_until "
+        "FROM public.password_recovery_challenges AS c "
+        "JOIN public.users AS u ON u.user_id = c.user_id "
+        f"WHERE c.{column} = :digest FOR UPDATE OF u"
+    ), {"digest": digest}).mappings().one_or_none()
+
+    if row is None:
+        return  # Existing token verifier supplies the generic invalid-token result.
+    if row["account_status"] != "active" or row["email_verified_at"] is None:
+        raise _error(401, _RESTART)
+
+    locked_until = row["locked_until"]
+    if locked_until is None:
+        return
+    if not isinstance(locked_until, datetime) or locked_until.tzinfo is None:
+        raise _error(503, _UNAVAILABLE)
+    remaining = math.ceil(
+        (locked_until.astimezone(timezone.utc) - datetime.now(timezone.utc)).total_seconds()
+    )
+    if remaining > 0:
+        raise _error(429, _TOO_MANY, remaining)
 
 
 def _smtp_delivery(issue: object, email: str) -> None:
@@ -482,6 +542,7 @@ def resend_password_recovery_code(
     token = _required_cookie(request, "otp")
     try:
         with SessionLocal.begin() as db:
+            _require_unlocked_recovery_owner(db, token=token, kind="otp")
             issue = resend_recovery_otp(db, challenge_token=token)
             recipient = db.execute(
                 select(users_table.c.email).where(users_table.c.user_id == issue.user_id)
@@ -490,6 +551,8 @@ def resend_password_recovery_code(
         raise _error(429, _TOO_MANY, exc.retry_after_seconds) from None
     except RecoveryGrantInvalid:
         raise _error(401, _RESTART) from None
+    except HTTPException:
+        raise  # Keep the lockout's 429 + Retry-After intact.
     except Exception:
         raise _error(503, _UNAVAILABLE) from None
     try:
@@ -510,7 +573,10 @@ def verify_password_recovery_code(
     token = _required_cookie(request, "otp")
     try:
         with SessionLocal.begin() as db:
+            _require_unlocked_recovery_owner(db, token=token, kind="otp")
             grant = verify_recovery_otp(db, challenge_token=token, code=payload.otp)
+    except HTTPException:
+        raise  # Keep the lockout's 429 + Retry-After intact.
     except Exception:
         raise _error(503, _UNAVAILABLE) from None
     if grant is None:
@@ -531,6 +597,7 @@ def reset_recovered_password(
     token = _required_cookie(request, "grant")
     try:
         with SessionLocal.begin() as db:
+            _require_unlocked_recovery_owner(db, token=token, kind="grant")
             result = consume_reset_grant_and_change_password(
                 db, reset_grant_token=token,
                 new_password=payload.new_password,
@@ -547,6 +614,8 @@ def reset_recovered_password(
         raise _error(400, str(exc)) from None
     except (PasswordHistoryUnavailable, RecoveryStoreUnavailable):
         raise _error(503, _UNAVAILABLE) from None
+    except HTTPException:
+        raise  # Keep the lockout's 429 + Retry-After intact.
     except Exception:
         raise _error(503, _UNAVAILABLE) from None
 

@@ -1,5 +1,6 @@
+
 /*
- * Dormora Frontend File 125 — real Forgot Password flow.
+ * Dormora Frontend File 125 — real Forgot Password flow (Fix 01: question catalog compatibility).
  * REPLACE: frontend/src/pages/ForgotPasswordPage.jsx
  *
  * Reuses the original File 29/30 two-column layout and existing forgot-* CSS.
@@ -9,7 +10,7 @@
  *
  * Local testing ONLY: Vite http://localhost:5173 with
  * VITE_DORMORA_LOCAL_LOGIN=true and VITE_DORMORA_RECAPTCHA_V2_SITE_KEY set.
- * Start File 124's --enable-local-recovery runner on localhost:8000.
+ * Start File 129's --enable-local-recovery runner on localhost:8000.
  * This page alone does not enable recovery in a normal backend process.
  */
 
@@ -34,7 +35,7 @@ import {
 import "../App.css";
 
 const API_BASE = "http://localhost:8000";
-const SITE_KEY = String(import.meta.env.VITE_DORMORA_RECAPTCHA_V2_SITE_KEY || "").trim();
+const SITE_KEY = String(import.meta.env.VITE_DORMORA_RECAPTCHA_V2_SITE_KEY ||"").trim();
 const LOCAL_RECOVERY_ENABLED =
   import.meta.env.DEV === true &&
   import.meta.env.VITE_DORMORA_LOCAL_LOGIN === "true" &&
@@ -45,9 +46,9 @@ const LOCAL_RECOVERY_ENABLED =
 
 const STEPS = [
   { label: "Identify account", hint: "Username and CAPTCHA", icon: UserRound },
-  { label: "Security question", hint: "Verify one registered answer", icon: ShieldCheck },
-  { label: "Email verification", hint: "Enter the six-digit code", icon: Mail },
-  { label: "New password", hint: "Complete your secure reset", icon: KeyRound },
+  { label: "Security question", hint: "Use one answer saved at registration", icon: ShieldCheck },
+  { label: "Email verification", hint: "Enter the six-digit code", icon: Mail},
+  { label: "New password", hint: "Complete your secure reset", icon: KeyRound},
 ];
 
 const FIELD_STYLE = {
@@ -97,7 +98,7 @@ async function requestJson(path, options = {}) {
 // CSRF is verified by Dormora's File 56 middleware, never by this browser.
 async function postWithCsrf(path, payload) {
   const { response: csrfResponse, body: csrfBody } = await requestJson("/api/csrf");
-  if (csrfResponse.status !== 200 || typeof csrfBody?.csrf_token !== "string" || !csrfBody.csrf_token) {
+  if (csrfResponse.status !== 200 || typeof csrfBody?.csrf_token !== "string"|| !csrfBody.csrf_token) {
     throw new Error("csrf_unavailable");
   }
   return requestJson(`/api/auth/password-recovery/${path}`, {
@@ -210,7 +211,7 @@ function RecoveryCaptcha({ siteKey, onToken, revision }) {
       script?.removeEventListener("load", mount);
       script?.removeEventListener("error", scriptError);
       if (widgetId !== null && typeof window.grecaptcha?.reset === "function") {
-        try { window.grecaptcha.reset(widgetId); } catch { /* Retired widget. */ }
+        try { window.grecaptcha.reset(widgetId); } catch { /* Retired widget.*/ }
       }
       mountTarget.remove();
     };
@@ -265,12 +266,12 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
   const recoveryReady = LOCAL_RECOVERY_ENABLED && Boolean(SITE_KEY);
 
   function errorText(response, body, path) {
-    if (response.status === 404) return "Password recovery is not active. Start File 124's localhost recovery runner.";
+    if (response.status === 404) return "Password recovery is not active. Start File 129's localhost recovery runner.";
     if (response.status === 403) return "Origin or CSRF verification failed. Use http://localhost:5173 and restart the recovery runner.";
     if (response.status === 429) return `Too many attempts. Try again after ${retrySeconds(response)} seconds.`;
     if (response.status === 503) return "Password recovery is temporarily unavailable. Check your FastAPI terminal.";
     if (response.status === 401) return path === "verify-otp"
-      ? "That code was not accepted. Check the latest email and try again, or restart recovery if the challenge expired."
+      ? "That code was not accepted. Check the latest email and try again, orrestart recovery if the challenge expired."
       : "The recovery information could not be verified.";
     if (response.status === 400 && path === "identify") return "Check your username and complete the Google CAPTCHA.";
     if (response.status === 400 && path === "reset" && typeof body?.detail === "string" && body.detail.length <= 180)
@@ -308,7 +309,7 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
       const { response, body } = await postWithCsrf(path, payload);
       if (response.status === 200) {
         const accepted = onAccepted(body);
-        if (!accepted) setFeedback({ kind: "error", text: "The backend response was incomplete. Restart recovery before continuing." });
+        if (!accepted) setFeedback({ kind: "error", text: "The recovery service returned an unexpected response. Check the Network response before retrying." });
       } else {
         if (response.status === 429 && path === "resend-otp") {
           setResendAfter(Date.now() + retrySeconds(response) * 1000);
@@ -320,7 +321,7 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
         }
       }
     } catch {
-      setFeedback({ kind: "error", text: uncertainMessage || "Could not contact the localhost recovery API. Check File 124 and /api/csrf." });
+      setFeedback({ kind: "error", text: uncertainMessage || "Could not contact the localhost recovery API. Check File 129 and /api/csrf." });
     } finally {
       actionInFlight.current = false;
       setBusy(false);
@@ -340,11 +341,17 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
     }
     run("identify", { username: typed, captcha_token: captchaToken }, (body) => {
       const choices = body?.questions;
-      if (!Array.isArray(choices) || choices.length !== 3 ||
-          !choices.every((q) => Number.isInteger(q?.question_id) && typeof q?.question_text === "string")) return false;
+      // The backend intentionally returns the FULL official catalog (8 questions)
+      // for every username. Each user registered answers to only 3 of those.
+      // Do not infer or reveal which questions belong to any account.
+      if (!Array.isArray(choices) || choices.length < 1 || choices.length > 8 ||
+          !choices.every((q) => Number.isInteger(q?.question_id) &&
+            q.question_id >= 1 && q.question_id <= 8 &&
+            typeof q?.question_text === "string" && q.question_text.trim())) return false;
+      if (new Set(choices.map((q) => q.question_id)).size !== choices.length) return false;
       setUsername(typed);
       setQuestions(choices);
-      setQuestionId(String(choices[0].question_id));
+      setQuestionId(""); // Require an intentional selection; avoid an accidental failed answer.
       setStep(1);
       return true;
     });
@@ -453,7 +460,7 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
             <Link to="/">Home</Link>
             <Link className="forgot-header-login" to="/login">Log In</Link>
             <button className="theme-button" type="button" onClick={onToggleTheme}
-              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}>
+              aria-label={darkMode ? "Switch to light mode" : "Switch to darkmode"}>
               {darkMode ? <Sun size={19} /> : <Moon size={19} />}
             </button>
           </nav>
@@ -463,7 +470,7 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
       <main className="forgot-main">
         <div className="page-container forgot-layout">
           <section className="forgot-intro" aria-label="Recovery instructions">
-            <span className="forgot-eyebrow"><ShieldCheck size={17} /> Secure account recovery</span>
+            <span className="forgot-eyebrow"><ShieldCheck size={17} /> Secureaccount recovery</span>
             <h1>Recover your <span>Dormora account.</span></h1>
             <p className="forgot-description">
               Follow the four security steps to reset your password. Your account is protected
@@ -472,7 +479,7 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
             <ol className="forgot-steps">
               {STEPS.map(({ label, hint, icon: Icon }, index) => (
                 <li className={`forgot-step ${activeStep === index ? "is-current" : ""}`} key={label}
-                  aria-current={activeStep === index && step !== 4 ? "step" : undefined}>
+                  aria-current={activeStep === index && step !== 4 ? "step" :undefined}>
                   <span className="forgot-step-number">0{index + 1}</span>
                   <span className="forgot-step-icon"><Icon size={19} /></span>
                   <span className="forgot-step-copy"><strong>{label}</strong><small>{hint}</small></span>
@@ -496,15 +503,15 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
             <h2>{["Forgot your password?", "Choose your security question", "Verify your email code", "Set a new password", "Password updated"][step]}</h2>
             <p className="forgot-card-subtitle">{[
               "Enter your registered username and complete the CAPTCHA to begin.",
-              "Choose one assigned question, then enter and confirm your answer.",
-              "Check your registered email for the latest six-digit code. Codes expire after three minutes.",
+              "Select a question you answered during registration, then enter and confirm your answer.",
+              "Check your registered email for the latest six-digit code. Codes expire after five minutes.",
               "Your verified reset permission is temporary and can be used only once.",
-              "Your password change has been confirmed by Dormora. Sign in to continue.",
+              "Your password change has been confirmed by Dormora. Sign in tocontinue.",
             ][step]}</p>
 
-            {!LOCAL_RECOVERY_ENABLED && <p className="forgot-captcha-preview" role="note">
+            {!LOCAL_RECOVERY_ENABLED && <p className="forgot-captcha-preview"role="note">
               Local recovery is inactive. Run Vite on http://localhost:5173 with
-              VITE_DORMORA_LOCAL_LOGIN=true and start File 124's recovery runner.
+              VITE_DORMORA_LOCAL_LOGIN=true and start File 129's recovery runner.
             </p>}
 
             {step === 0 && (
@@ -514,7 +521,7 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
                   <div className="forgot-input-wrap">
                     <UserRound size={19} aria-hidden="true" />
                     <input id="recovery-username" name="username" value={username}
-                      onChange={(event) => { setUsername(event.target.value); setFeedback(null); }}
+                      onChange={(event) => { setUsername(event.target.value);setFeedback(null); }}
                       autoComplete="username" maxLength={255} placeholder="Enter your registered username"
                       required disabled={busy || !LOCAL_RECOVERY_ENABLED} />
                   </div>
@@ -540,9 +547,10 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
             {step === 1 && (
               <form className="forgot-form" onSubmit={verifyAnswer}>
                 <div className="forgot-field">
-                  <label htmlFor="recovery-question">Choose the following question <span className="forgot-required">*</span></label>
+                  <label htmlFor="recovery-question">Choose a question you answered at registration <span className="forgot-required">*</span></label>
                   <select id="recovery-question" style={FIELD_STYLE} value={questionId}
-                    onChange={(event) => { setQuestionId(event.target.value); setFeedback(null); }} disabled={busy} required>
+                    onChange={(event) => { setQuestionId(event.target.value);setFeedback(null); }} disabled={busy} required>
+                    <option value="" disabled>Select one of your registered questions</option>
                     {questions.map(({ question_id, question_text }) => (
                       <option key={question_id} value={String(question_id)}>{question_text}</option>
                     ))}
@@ -561,7 +569,7 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
                     autoComplete="off" maxLength={100} required disabled={busy} />
                 </div>
                 <button className="forgot-submit-button" type="submit"
-                  disabled={busy || !answer || !confirmAnswer || answer !== confirmAnswer}>
+                  disabled={busy || !questionId || !answer || !confirmAnswer || answer !== confirmAnswer}>
                   {busy ? "Checking answer…" : "Verify answer and send email code"} {!busy && <ArrowRight size={18} />}
                 </button>
               </form>
@@ -573,12 +581,12 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
                   <label htmlFor="recovery-otp">Six-digit email OTP <span className="forgot-required">*</span></label>
                   <div className="forgot-input-wrap">
                     <Mail size={19} aria-hidden="true" />
-                    <input ref={otpRef} id="recovery-otp" inputMode="numeric" type="text"
+                    <input ref={otpRef} id="recovery-otp" inputMode="numeric"type="text"
                       autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6}
                       placeholder="000000" value={otp} required disabled={busy}
                       onChange={(event) => { setOtp(event.target.value.replace(/\D/g, "").slice(0, 6)); setFeedback(null); }} />
                   </div>
-                  <small style={{ color: "var(--muted)" }}>Three-minute code expiry · Maximum three incorrect attempts.</small>
+                  <small style={{ color: "var(--muted)" }}>Five-minute code expiry · Maximum three incorrect attempts.</small>
                 </div>
                 <button className="forgot-submit-button" type="submit" disabled={busy || otp.length !== 6}>
                   {busy ? "Verifying code…" : "Verify code"} {!busy && <ArrowRight size={18} />}
@@ -599,7 +607,7 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
                   Password strength: <strong>{passwordStrength(nextPassword)}</strong>
                   {nextPassword && !hasValidPassword ? " · Requires 10–64 characters, uppercase, lowercase, number and symbol." : ""}
                 </small>
-                <small style={{ color: "var(--muted)" }}>Your current and two preceding passwords cannot be reused.</small>
+                <small style={{ color: "var(--muted)" }}>Your current and twopreceding passwords cannot be reused.</small>
                 <button className="forgot-submit-button" type="submit"
                   disabled={busy || !hasValidPassword || nextPassword !== confirmPassword}>
                   {busy ? "Updating password…" : "Change password securely"} {!busy && <ArrowRight size={18} />}
@@ -629,7 +637,7 @@ function ForgotPasswordPage({ darkMode, onToggleTheme }) {
             <p className="forgot-preview-message">
               {recoveryReady
                 ? "Security checks and password changes are validated by FastAPI, not the browser."
-                : "Recovery requires the localhost-only File 124 backend runner."}
+                : "Recovery requires the localhost-only File 129 backend runner."}
             </p>
             <div className="forgot-card-footer">
               <Link to="/login"><ArrowLeft size={16} /> Back to Login</Link>

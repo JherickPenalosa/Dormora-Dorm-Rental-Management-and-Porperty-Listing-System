@@ -1,7 +1,7 @@
 
 """Dormora File 119 -- password-recovery OTP email delivery.
 
-CREATE: backend/app/services/password_recovery_otp_email.py
+REPLACE: backend/app/services/password_recovery_otp_email.py
 
 This is an internal service, NOT an exposed FastAPI route. Its caller MUST:
   1. Verify CAPTCHA and the account's registered security-question answer.
@@ -15,6 +15,10 @@ This is an internal service, NOT an exposed FastAPI route. Its caller MUST:
 This file ONLY validates and delivers the email. It does NOT authenticate a
 user, create a session or reset a password. It never logs or prints an OTP.
 It uses the same TLS-only Gmail/SMTP configuration as File 107.
+
+Post-presentation correction: Accept recovery OTPs valid for up to 5 minutes
+(300 seconds), matching the instructor's updated OTP policy and the recovery
+challenge store. Preserve all other delivery controls.
 """
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ from app.services.email_service import EmailDeliveryError
 _EMAIL = TypeAdapter(EmailStr)
 _PHT = timezone(timedelta(hours=8), name="PHT")
 _CODE_RE = re.compile(r"[0-9]{6}\Z", flags=re.ASCII)
-_SEEDED_MAX_LIFETIME_SECONDS = 180  # Dormora: three-minute OTP expiry.
+_SEEDED_MAX_LIFETIME_SECONDS = 300  # Instructor policy: five-minute OTP expiry.
 
 
 class PasswordRecoveryEmailRejected(ValueError):
@@ -73,7 +77,7 @@ def _validate_delivery(delivery: PasswordRecoveryOtpDelivery) -> str:
     except (OverflowError, ValueError, TypeError):
         raise PasswordRecoveryEmailRejected("Invalid reset OTP lifetime.") from None
     if not 0 < lifetime <= _SEEDED_MAX_LIFETIME_SECONDS:
-        raise PasswordRecoveryEmailRejected("Reset OTP must expire within three minutes.")
+        raise PasswordRecoveryEmailRejected("Reset OTP must expire within five minutes.")
     if expires.astimezone(timezone.utc) <= datetime.now(timezone.utc):
         raise PasswordRecoveryEmailRejected("Reset OTP is already expired.")
     try:
@@ -117,7 +121,7 @@ def build_password_recovery_otp_email(
         "Dormora account recovery\n\n"
         "A password reset was requested for your Dormora account.\n\n"
         f"Your six-digit password reset code is: {delivery.code}\n"
-        f"Expires: {expiry} (valid for no more than 3 minutes).\n\n"
+        f"Expires: {expiry} (valid for no more than 5 minutes).\n\n"
         "Enter this code only on Dormora's password recovery page.\n"
         "The code can be used once. Three incorrect attempts cancel it.\n"
         "Requesting a replacement code cancels the previous code.\n\n"

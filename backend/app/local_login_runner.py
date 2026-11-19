@@ -163,10 +163,10 @@ def _check_environment_and_database() -> None:
     settings.build_recaptcha_v2_verifier(client_ip=_LOOPBACK_BIND)
 
     if not (
-        IP_FAILURE_THRESHOLD == 14
+        IP_FAILURE_THRESHOLD == 10
         and SESSION_IDLE_TIMEOUT_MINUTES == 15
         and CHALLENGE_TTL_SECONDS == 900
-        and EXPIRY.total_seconds() == 180
+        and EXPIRY.total_seconds() == 300
         and COOLDOWN.total_seconds() == 60
         and MAX_ATTEMPTS == 3
         and MAX_ISSUES_PER_WINDOW == 4

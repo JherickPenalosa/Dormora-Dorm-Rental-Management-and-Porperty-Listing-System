@@ -26,7 +26,7 @@ from app.models.user import users_table
 email_otps_table = Table("email_otps", MetaData(), schema="public", autoload_with=engine)
 security_logs_table = Table("security_logs", MetaData(), schema="public", autoload_with=engine)
 PURPOSE = "login"
-EXPIRY = timedelta(minutes=3)
+EXPIRY = timedelta(minutes=5)
 WINDOW = timedelta(minutes=15)
 COOLDOWN = timedelta(seconds=60)
 MAX_ATTEMPTS = 3
